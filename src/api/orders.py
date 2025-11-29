@@ -5,6 +5,7 @@ from typing import Optional, List
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import or_, exists
 
 from src.database import get_db
 from src.models.order import Order
@@ -61,9 +62,17 @@ def list_orders(
     if customer_id:
         query = query.filter(Order.customer_id == customer_id)
     if search:
+        # Search in order number, customer PO, and line item part numbers
+        part_number_match = exists().where(
+            (LineItem.order_id == Order.id) &
+            (LineItem.part_number.ilike(f"%{search}%"))
+        )
         query = query.filter(
-            (Order.order_number.ilike(f"%{search}%"))
-            | (Order.customer_po.ilike(f"%{search}%"))
+            or_(
+                Order.order_number.ilike(f"%{search}%"),
+                Order.customer_po.ilike(f"%{search}%"),
+                part_number_match,
+            )
         )
     if ship_date_from:
         query = query.filter(Order.expected_ship_date >= ship_date_from)
