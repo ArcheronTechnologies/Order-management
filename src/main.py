@@ -1,5 +1,6 @@
 """FastAPI main application."""
 
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -16,12 +17,16 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# CORS middleware for Streamlit frontend
+# CORS middleware - configurable via environment
+# In production, set CORS_ORIGINS to specific allowed origins
+cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:8501,http://localhost:3000")
+allowed_origins = [origin.strip() for origin in cors_origins.split(",")]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins for local development
+    allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PATCH", "DELETE"],
     allow_headers=["*"],
 )
 

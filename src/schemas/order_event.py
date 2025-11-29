@@ -3,14 +3,14 @@
 from datetime import datetime
 from typing import Optional, Dict, Any
 from uuid import UUID
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class OrderEventBase(BaseModel):
     """Base order event schema."""
 
     event_type: str
-    event_data: Dict[str, Any] = {}
+    event_data: Dict[str, Any] = Field(default_factory=dict)
     source: str = "manual"
     source_reference: Optional[str] = None
     created_by: Optional[str] = None

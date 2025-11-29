@@ -5,16 +5,18 @@ services:
   db:
     image: postgres:15-alpine
     container_name: j2-tracker-db
+    env_file:
+      - .env
     environment:
-      POSTGRES_USER: j2tracker
-      POSTGRES_PASSWORD: j2tracker
-      POSTGRES_DB: j2_tracker
+      POSTGRES_USER: ${POSTGRES_USER:-j2tracker}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-j2tracker}
+      POSTGRES_DB: ${POSTGRES_DB:-j2_tracker}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U j2tracker -d j2_tracker"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-j2tracker} -d ${POSTGRES_DB:-j2_tracker}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -24,10 +26,13 @@ services:
     build: .
     container_name: j2-tracker-api
     command: uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
+    env_file:
+      - .env
     environment:
-      DATABASE_URL: postgresql://j2tracker:j2tracker@db:5432/j2_tracker
+      DATABASE_URL: postgresql://${POSTGRES_USER:-j2tracker}:${POSTGRES_PASSWORD:-j2tracker}@db:5432/${POSTGRES_DB:-j2_tracker}
       API_HOST: 0.0.0.0
       API_PORT: 8000
+      CORS_ORIGINS: http://localhost:8501,http://frontend:8501
     ports:
       - "8000:8000"
     volumes:

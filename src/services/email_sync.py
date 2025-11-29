@@ -7,12 +7,16 @@ Note: Full implementation requires Azure AD app registration.
 This is a placeholder for Phase 1c.
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
 from dataclasses import dataclass
+from urllib.parse import quote
 import httpx
 
 from src.config import get_settings
+
+# HTTP timeout in seconds
+HTTP_TIMEOUT = 30.0
 
 
 @dataclass
@@ -69,7 +73,7 @@ class EmailSyncService:
             f"{self.settings.azure_tenant_id}/oauth2/v2.0/token"
         )
 
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
             response = await client.post(
                 token_url,
                 data={
@@ -83,9 +87,9 @@ class EmailSyncService:
             data = response.json()
 
         self._access_token = data["access_token"]
-        # Token typically expires in 3600 seconds, cache with buffer
+        # Token typically expires in 3600 seconds, cache with 5-minute buffer
         expires_in = data.get("expires_in", 3600) - 300
-        self._token_expires = datetime.utcnow()
+        self._token_expires = datetime.utcnow() + timedelta(seconds=expires_in)
 
         return self._access_token
 
@@ -97,12 +101,15 @@ class EmailSyncService:
         token = await self.get_access_token()
         user_email = self.settings.graph_user_email
 
+        # Escape folder name for OData filter to prevent injection
+        escaped_folder_name = folder_name.replace("'", "''")
+
         url = (
-            f"https://graph.microsoft.com/v1.0/users/{user_email}"
-            f"/mailFolders?$filter=displayName eq '{folder_name}'"
+            f"https://graph.microsoft.com/v1.0/users/{quote(user_email, safe='@')}"
+            f"/mailFolders?$filter=displayName eq '{escaped_folder_name}'"
         )
 
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
             response = await client.get(
                 url,
                 headers={"Authorization": f"Bearer {token}"},
@@ -143,21 +150,28 @@ class EmailSyncService:
             if not folder_id:
                 return []
 
-        # Build query
-        url = (
-            f"https://graph.microsoft.com/v1.0/users/{user_email}"
-            f"/mailFolders/{folder_id}/messages"
-            f"?$top={limit}&$orderby=receivedDateTime desc"
-            f"&$select=id,subject,from,receivedDateTime,bodyPreview,body,hasAttachments"
+        # Build base URL with safe encoding
+        base_url = (
+            f"https://graph.microsoft.com/v1.0/users/{quote(user_email, safe='@')}"
+            f"/mailFolders/{quote(folder_id, safe='')}/messages"
         )
 
-        if since:
-            since_str = since.isoformat() + "Z"
-            url += f"&$filter=receivedDateTime ge {since_str}"
+        # Build query parameters
+        params = {
+            "$top": str(limit),
+            "$orderby": "receivedDateTime desc",
+            "$select": "id,subject,from,receivedDateTime,bodyPreview,body,hasAttachments",
+        }
 
-        async with httpx.AsyncClient() as client:
+        if since:
+            # Format datetime for OData filter
+            since_str = since.strftime("%Y-%m-%dT%H:%M:%SZ")
+            params["$filter"] = f"receivedDateTime ge {since_str}"
+
+        async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
             response = await client.get(
-                url,
+                base_url,
+                params=params,
                 headers={"Authorization": f"Bearer {token}"},
             )
             response.raise_for_status()
@@ -166,15 +180,20 @@ class EmailSyncService:
         emails = []
         for msg in data.get("value", []):
             sender = msg.get("from", {}).get("emailAddress", {})
+            try:
+                received_at = datetime.fromisoformat(
+                    msg["receivedDateTime"].replace("Z", "+00:00")
+                )
+            except (KeyError, ValueError):
+                received_at = datetime.utcnow()
+
             emails.append(
                 EmailMessage(
                     message_id=msg["id"],
                     subject=msg.get("subject", ""),
                     sender_email=sender.get("address", ""),
                     sender_name=sender.get("name", ""),
-                    received_at=datetime.fromisoformat(
-                        msg["receivedDateTime"].replace("Z", "+00:00")
-                    ),
+                    received_at=received_at,
                     body_preview=msg.get("bodyPreview", "")[:500],
                     body_content=msg.get("body", {}).get("content", ""),
                     has_attachments=msg.get("hasAttachments", False),
@@ -213,6 +232,20 @@ class EmailSyncService:
 
         try:
             emails = await self.fetch_emails(since=since)
+        except httpx.TimeoutException:
+            return {
+                "status": "error",
+                "message": "Request timed out while fetching emails",
+                "new_count": 0,
+                "skipped_count": 0,
+            }
+        except httpx.HTTPStatusError as e:
+            return {
+                "status": "error",
+                "message": f"HTTP error {e.response.status_code}: {e.response.text[:200]}",
+                "new_count": 0,
+                "skipped_count": 0,
+            }
         except Exception as e:
             return {
                 "status": "error",
