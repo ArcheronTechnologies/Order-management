@@ -182,6 +182,12 @@ refactor everything else needs).
 - **M16 — Interface, tools & meta.** Portal/hub + bookmarks, search + a
   "RugbyPedia" glossary, inbox/news, data hub + comparison tools, calendar;
   modding / custom DB; holiday / instant-result.
+  - *Done (inbox):* a **club inbox / news feed** that accumulates the career's
+    headlines — match results (with man of the match), signings, new sponsors,
+    facility upgrades, season summaries, promotion/relegation, Grand Final and
+    Sevens outcomes — each dated by year/round, newest first, persisted across
+    reloads (`logNews`/news view). *Still to do:* search, RugbyPedia, data hub,
+    calendar, modding.
 
 ## Someday-maybe (not scoped)
 

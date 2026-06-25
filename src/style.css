@@ -425,6 +425,15 @@ button.primary:hover { filter: brightness(1.08); }
 .snub-note { max-width: 1100px; margin: 8px auto 0; padding: 8px 12px; border-radius: 8px; background: rgba(255,107,107,0.1); border: 1px solid rgba(255,107,107,0.3); color: #ffb3b3; font-size: 13px; }
 .concern-tag { color: #ff6b6b; font-size: 11px; font-weight: 700; margin-left: 6px; }
 
+/* club inbox / news */
+.news-panel { max-width: 760px; margin: 16px auto 0; padding: 0 4px; }
+.news-list { list-style: none; margin: 0; padding: 0; }
+.news-list li { display: flex; gap: 12px; padding: 9px 12px; border-bottom: 1px solid rgba(255,255,255,0.06); font-size: 14px; }
+.news-list li:nth-child(odd) { background: rgba(255,255,255,0.02); }
+.news-when { color: var(--muted); font-size: 12px; white-space: nowrap; min-width: 72px; font-variant-numeric: tabular-nums; }
+.news-text { color: var(--text); }
+.news-empty { color: var(--muted); }
+
 /* recruitment */
 .stars { color: #ffd166; letter-spacing: 1px; font-size: 12px; }
 .stars.pot { color: #5ebfff; }

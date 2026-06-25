@@ -58,7 +58,8 @@ const sevensView = $("sevensView");
 const financesView = $("financesView");
 const sponsorsView = $("sponsorsView");
 const recruitView = $("recruitView");
-type ViewName = "career" | "season" | "match" | "squad" | "select" | "sevens" | "finances" | "sponsors" | "recruit";
+const newsView = $("newsView");
+type ViewName = "career" | "season" | "match" | "squad" | "select" | "sevens" | "finances" | "sponsors" | "recruit" | "news";
 function showView(v: ViewName) {
   appView.classList.toggle("hidden", v !== "match");
   careerView.classList.toggle("hidden", v !== "career");
@@ -69,7 +70,26 @@ function showView(v: ViewName) {
   financesView.classList.toggle("hidden", v !== "finances");
   sponsorsView.classList.toggle("hidden", v !== "sponsors");
   recruitView.classList.toggle("hidden", v !== "recruit");
+  newsView.classList.toggle("hidden", v !== "news");
 }
+
+// ---- club inbox / news feed ----
+interface NewsItem { year: number; round: number; text: string; }
+let news: NewsItem[] = [];
+function logNews(text: string) {
+  news.unshift({ year: season?.year ?? 1, round: season?.round ?? 0, text });
+  if (news.length > 250) news.length = 250;
+}
+function renderNews() {
+  $("newsList").innerHTML = news.length
+    ? news
+        .map((n) => `<li><span class="news-when">Yr ${n.year}${n.round ? ` · R${n.round}` : ""}</span><span class="news-text">${n.text}</span></li>`)
+        .join("")
+    : `<li class="news-empty">No news yet — play some rugby!</li>`;
+  showView("news");
+}
+$("newsBtn").addEventListener("click", renderNews);
+$("newsBack").addEventListener("click", () => renderSeason());
 
 // --- match view elements -------------------------------------------------
 const canvas = $("pitch") as HTMLCanvasElement;
@@ -223,6 +243,7 @@ function signRecruit(i: number) {
   rec.player.number = (roster.reduce((m, p) => Math.max(m, p.number), 0) || roster.length) + 1;
   roster.push(rec.player);
   recruitPool.splice(i, 1);
+  logNews(`✍️ Signed ${rec.player.position.short} ${rec.player.name} (${rec.background})`);
   save();
   renderRecruitment();
 }
@@ -341,6 +362,7 @@ function signSponsor(id: number) {
   const [offer] = sponsorOffers.splice(idx, 1);
   signedSponsors.push(offer);
   balance += offer.upfront;
+  logNews(`🤝 New sponsor ${offer.name} (${formatKr(offer.upfront)} up front)`);
   save();
   renderSponsors();
 }
@@ -355,6 +377,7 @@ $("finUpgrade").addEventListener("click", () => {
   balance -= cost;
   facState[club.short] = fac + 1;
   season.facilities.set(club, fac + 1); // so this season's reputation pull uses it
+  logNews(`🏗️ Facilities upgraded to level ${fac + 1}`);
   save();
   renderFinances();
 });
@@ -607,6 +630,7 @@ function save() {
     signedSponsors,
     seasonStartRep,
     recruits: recruitPool.map((r) => ({ p: serializePlayer(r.player), bg: r.background, st: r.stars, pot: r.potential })),
+    news: news.slice(0, 120),
     tactics: userTactics,
     results: season.fixtures
       .filter((f) => f.played)
@@ -655,6 +679,7 @@ function load(): boolean {
     } else {
       refreshRecruits();
     }
+    news = Array.isArray(d.news) ? d.news : [];
     userTactics = d.tactics ?? { ...PRESETS[0].tactics };
     trainingPlan = d.training ?? { ...DEFAULT_TRAINING };
     for (const r of d.results ?? []) {
@@ -724,8 +749,10 @@ function startCareer(club: Team) {
   gfResolved = false;
   nationalChamp = null;
   gfTie = null;
+  news = [];
   refreshSponsors();
   refreshRecruits();
+  logNews(`📅 You take charge of ${club.name} in ${divisionLabel(club)}.`);
   save();
   renderSeason();
 }
@@ -835,6 +862,7 @@ function renderSeason() {
       const r = quickSim(nC, sC, new Rng((seasonSeed * 13 + 7) >>> 0));
       nationalChamp = r.hs >= r.as ? nC : sC;
       gfResolved = true;
+      logNews(`🏅 Grand Final: ${nationalChamp.name} are national champions.`);
     }
     const gfLine = gfResolved && nationalChamp
       ? ` 🏅 <strong>Grand Final:</strong> ${nationalChamp.name} are national champions (${nC.short} v ${sC.short}).`
@@ -990,6 +1018,11 @@ function startNextSeason() {
     else resolvePlayoff(tie, simPlayoff(tie, rng), moves);
   }
   lastRolloverSummary = moves.length ? `Pyramid: ${moves.join(" · ")}.` : null;
+  // record the year's headlines in the inbox
+  const champ = season.table()[0]?.team;
+  const finishPos = season.table().findIndex((r) => r.team === season!.userClub) + 1;
+  if (champ) logNews(`🏆 ${champ.name} win ${divisionLabel(season.userClub)}; you finished ${ordinal(finishPos)}.`);
+  if (lastSponsorPayout) logNews(`💰 Sponsors paid out ${formatKr(lastSponsorPayout.total)} (${lastSponsorPayout.met}/${lastSponsorPayout.of} goals).`);
 
   if (userPlayoff) {
     playoffTie = userPlayoff;
@@ -1080,6 +1113,7 @@ function finalizeRollover() {
   gfTie = null;
   refreshSponsors();
   refreshRecruits();
+  logNews(`📅 Year ${season.year}: ${divisionLabel(season.userClub)} season begins.`);
   save();
   renderSeason();
 }
@@ -1126,6 +1160,7 @@ function finishGrandFinal() {
   if (!gfTie || !match || !season) return;
   nationalChamp = match.score.home >= match.score.away ? gfTie.a : gfTie.b;
   gfResolved = true;
+  logNews(`🏅 Grand Final: ${nationalChamp.name} are national champions${nationalChamp === season.userClub ? " — that's you!" : ""}.`);
   // lifting the national title is a big reputation & morale boost
   if (nationalChamp === season.userClub) {
     repState[season.userClub.short] = Math.min(100, (repState[season.userClub.short] ?? season.userClub.reputation) + 4);
@@ -1276,6 +1311,11 @@ function finishUserMatch() {
   season.record(currentFixture, match.score.home, match.score.away, ht, at);
   // game-time morale: starters lift, snubbed fringe players stew
   const won = match.score[userSide] > match.score[userSide === "home" ? "away" : "home"];
+  const drew = match.score.home === match.score.away;
+  logNews(
+    `${drew ? "🤝" : won ? "✅" : "❌"} ${currentFixture.home.short} ${match.score.home}–${match.score.away} ${currentFixture.away.short}` +
+    (lastMom ? ` · MotM ${lastMom.player.name}` : "")
+  );
   // post-match player ratings & man of the match (before the match is cleared)
   lastRatings = rateSide(match, userSide);
   lastMom = manOfTheMatch(match);
@@ -1419,6 +1459,7 @@ function applySevensReward() {
   const roster = season.rosterFor(season.userClub);
   for (const p of roster) p.condition.morale = Math.min(100, p.condition.morale + 4);
   season.reputation.set(season.userClub, Math.min(100, season.repOf(season.userClub) + 2));
+  logNews(`🏉 Won the Summer Sevens Cup!`);
   save();
 }
 
