@@ -563,3 +563,43 @@ button.primary:hover { filter: brightness(1.08); }
 .role-badge.cap { background: rgba(255,209,102,0.18); color: #ffd166; }
 .role-badge.gk { background: rgba(74,208,122,0.16); color: #4ad07a; }
 .role-badge.ll { background: rgba(94,191,255,0.16); color: #5ebfff; }
+
+/* ---- season calendar (M16) ---- */
+.calendar-list { list-style: none; margin: 0; padding: 0; }
+.calendar-list li { display: flex; align-items: center; gap: 12px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+.calendar-list li.cal-now { background: rgba(126,224,168,0.07); }
+.cal-rd { width: 38px; font-weight: 800; color: var(--muted); font-variant-numeric: tabular-nums; }
+.cal-fix { min-width: 92px; }
+.cal-res { font-weight: 700; font-variant-numeric: tabular-nums; }
+.cal-res.w { color: var(--accent); }
+.cal-res.l { color: var(--away); }
+.cal-res.d { color: #ffd166; }
+.cal-res.next, .cal-bye { color: var(--muted); font-weight: 500; }
+.cal-mile { margin-left: auto; color: #ffd166; font-size: 12px; }
+
+/* ---- player comparison (M16) ---- */
+.compare-pickers { display: flex; gap: 18px; margin-bottom: 14px; flex-wrap: wrap; }
+.compare-pickers label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+.compare-pickers select { background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; font-size: 13px; min-width: 220px; }
+.cmp-head { display: grid; grid-template-columns: 1fr 120px 1fr; gap: 10px; font-weight: 700; padding-bottom: 8px; border-bottom: 1px solid var(--line); margin-bottom: 6px; }
+.cmp-head > div:last-child { text-align: right; }
+.cmp-ca { color: var(--muted); font-size: 11px; font-weight: 600; }
+.cmp-row { display: grid; grid-template-columns: 1fr 120px 1fr; gap: 10px; align-items: center; padding: 3px 0; }
+.cmp-lbl { text-align: center; font-size: 12px; color: var(--muted); }
+.cmp-a, .cmp-b { display: flex; align-items: center; gap: 8px; }
+.cmp-a { justify-content: flex-end; }
+.cmp-v { width: 22px; font-variant-numeric: tabular-nums; font-weight: 700; text-align: center; }
+.cmp-bar { flex: 1; height: 10px; background: var(--bg); border: 1px solid var(--line); border-radius: 5px; overflow: hidden; display: flex; }
+.cmp-a .cmp-bar { justify-content: flex-end; }
+.cmp-bar i { display: block; height: 100%; border-radius: 5px; }
+.bar-a { background: var(--home); opacity: 0.55; }
+.bar-b { background: var(--away); opacity: 0.55; }
+.bar-a.win, .bar-b.win { opacity: 1; }
+
+/* ---- RugbyPedia (M16) ---- */
+.pedia-panel { max-height: none; }
+.pedia-sec { margin-bottom: 22px; }
+.pedia-sec h3 { color: var(--accent); border-bottom: 1px solid var(--line); padding-bottom: 5px; margin: 0 0 8px; }
+.pedia-entry { display: grid; grid-template-columns: 230px 1fr; gap: 14px; padding: 5px 0; }
+.pedia-entry dt { font-weight: 700; color: var(--text); }
+.pedia-entry dd { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.45; }

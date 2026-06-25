@@ -93,6 +93,9 @@
           <button id="sponsorsBtn">Sponsors</button>
           <button id="sevensBtn">Sevens Cup</button>
           <button id="openTacticsFromSeason">Tactics</button>
+          <button id="calendarBtn">Calendar</button>
+          <button id="compareBtn">Compare</button>
+          <button id="pediaBtn">RugbyPedia</button>
           <button id="newCareer">New career</button>
         </div>
       </header>
@@ -228,6 +231,47 @@
           </thead>
           <tbody id="youthBody"></tbody>
         </table>
+      </div>
+    </div>
+
+    <div id="calendarView" class="view hidden">
+      <header class="topbar">
+        <h1>Fly-Half <span class="sub">season calendar</span></h1>
+        <div class="controls">
+          <span id="calendarTitle" class="round-pill"></span>
+          <button id="calendarBack">‹ Season</button>
+        </div>
+      </header>
+      <div class="panel">
+        <ol id="calendarList" class="calendar-list"></ol>
+      </div>
+    </div>
+
+    <div id="compareView" class="view hidden">
+      <header class="topbar">
+        <h1>Fly-Half <span class="sub">player comparison</span></h1>
+        <div class="controls">
+          <button id="compareBack">‹ Season</button>
+        </div>
+      </header>
+      <div class="panel compare-panel">
+        <div class="compare-pickers">
+          <label>Player A <select id="compareA"></select></label>
+          <label>Player B <select id="compareB"></select></label>
+        </div>
+        <div id="compareGrid" class="compare-grid"></div>
+      </div>
+    </div>
+
+    <div id="pediaView" class="view hidden">
+      <header class="topbar">
+        <h1>Fly-Half <span class="sub">RugbyPedia</span></h1>
+        <div class="controls">
+          <button id="pediaBack">‹ Season</button>
+        </div>
+      </header>
+      <div class="panel pedia-panel">
+        <div id="pediaBody"></div>
       </div>
     </div>
 

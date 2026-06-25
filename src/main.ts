@@ -31,6 +31,8 @@ import {
   type TrainingReport,
 } from "./engine/training";
 import type { Player } from "./engine/types";
+import { ATTRIBUTE_KEYS } from "./engine/types";
+import { PEDIA } from "./data/pedia";
 import {
   rollAvailability,
   autoSelect,
@@ -69,7 +71,10 @@ const managerView = $("managerView");
 const clubView = $("clubView");
 const boardView = $("boardView");
 const youthView = $("youthView");
-type ViewName = "career" | "season" | "match" | "squad" | "select" | "sevens" | "finances" | "sponsors" | "recruit" | "news" | "manager" | "club" | "board" | "youth";
+const calendarView = $("calendarView");
+const compareView = $("compareView");
+const pediaView = $("pediaView");
+type ViewName = "career" | "season" | "match" | "squad" | "select" | "sevens" | "finances" | "sponsors" | "recruit" | "news" | "manager" | "club" | "board" | "youth" | "calendar" | "compare" | "pedia";
 function showView(v: ViewName) {
   appView.classList.toggle("hidden", v !== "match");
   careerView.classList.toggle("hidden", v !== "career");
@@ -85,6 +90,9 @@ function showView(v: ViewName) {
   clubView.classList.toggle("hidden", v !== "club");
   boardView.classList.toggle("hidden", v !== "board");
   youthView.classList.toggle("hidden", v !== "youth");
+  calendarView.classList.toggle("hidden", v !== "calendar");
+  compareView.classList.toggle("hidden", v !== "compare");
+  pediaView.classList.toggle("hidden", v !== "pedia");
 }
 
 // ---- manager profile & career history ----
@@ -506,6 +514,101 @@ function promoteYouth(i: number) {
 }
 $("youthBtn").addEventListener("click", renderYouth);
 $("youthBack").addEventListener("click", () => renderSeason());
+
+// ---- season calendar (M16) ----
+function renderCalendar() {
+  if (!season) return;
+  const user = season.userClub;
+  $("calendarTitle").textContent = `Year ${season.year} · ${divisionLabel(user)}`;
+  const sevensWindow = Math.max(1, Math.round(season.totalRounds / 2)); // mid-summer, around Midsommar
+  const rows: string[] = [];
+  for (let r = 1; r <= season.totalRounds; r++) {
+    const f = season.fixtures.find((x) => x.round === r && (x.home === user || x.away === user));
+    let detail = "<span class=\"cal-bye\">Bye</span>";
+    if (f) {
+      const home = f.home === user;
+      const opp = home ? f.away : f.home;
+      const venue = home ? "vs" : "@";
+      if (f.played) {
+        const us = home ? f.homeScore : f.awayScore;
+        const them = home ? f.awayScore : f.homeScore;
+        const res = us > them ? "W" : us < them ? "L" : "D";
+        detail = `<span class="cal-fix">${venue} ${opp.short}</span><span class="cal-res ${res.toLowerCase()}">${res} ${us}–${them}</span>`;
+      } else {
+        detail = `<span class="cal-fix">${venue} ${opp.short}</span><span class="cal-res next">${r === season.round ? "next up" : "—"}</span>`;
+      }
+    }
+    const milestone =
+      r === sevensWindow ? '<span class="cal-mile">☀️ Summer Sevens window</span>' :
+      r === season.totalRounds ? '<span class="cal-mile">🏆 Season finale</span>' : "";
+    rows.push(
+      `<li class="${r === season.round ? "cal-now" : ""}"><span class="cal-rd">R${r}</span>${detail}${milestone}</li>`
+    );
+  }
+  $("calendarList").innerHTML = rows.join("");
+  showView("calendar");
+}
+$("calendarBtn").addEventListener("click", renderCalendar);
+$("calendarBack").addEventListener("click", () => renderSeason());
+
+// ---- player comparison data hub (M16) ----
+const ATTR_LABEL: Record<string, string> = {
+  pace: "Pace", strength: "Strength", stamina: "Stamina", handling: "Handling",
+  tackling: "Tackling", kicking: "Kicking", decisionMaking: "Decisions",
+  positioning: "Positioning", discipline: "Discipline", scrummaging: "Scrummaging",
+  lineoutJump: "Lineout", throwing: "Throwing",
+};
+function fillCompareSelect(sel: HTMLSelectElement, roster: Player[], selectedId: number) {
+  sel.innerHTML = roster
+    .map((p) => `<option value="${p.id}"${p.id === selectedId ? " selected" : ""}>${p.position.short} · ${p.name}</option>`)
+    .join("");
+}
+function renderCompareGrid() {
+  if (!season) return;
+  const roster = [...season.rosterFor(season.userClub)].sort((a, b) => a.position.number - b.position.number);
+  const a = roster.find((p) => p.id === Number(($("compareA") as HTMLSelectElement).value));
+  const b = roster.find((p) => p.id === Number(($("compareB") as HTMLSelectElement).value));
+  if (!a || !b) return;
+  const rows = ATTRIBUTE_KEYS.map((k) => {
+    const av = a.attr[k], bv = b.attr[k];
+    const aw = Math.round((av / 20) * 100), bw = Math.round((bv / 20) * 100);
+    const aWin = av > bv ? " win" : "", bWin = bv > av ? " win" : "";
+    return `<div class="cmp-row">
+      <div class="cmp-a"><span class="cmp-v">${av}</span><span class="cmp-bar"><i class="bar-a${aWin}" style="width:${aw}%"></i></span></div>
+      <div class="cmp-lbl">${ATTR_LABEL[k] ?? k}</div>
+      <div class="cmp-b"><span class="cmp-bar"><i class="bar-b${bWin}" style="width:${bw}%"></i></span><span class="cmp-v">${bv}</span></div>
+    </div>`;
+  }).join("");
+  $("compareGrid").innerHTML =
+    `<div class="cmp-head"><div>${a.position.short} ${a.name} <span class="cmp-ca">CA ${a.hidden.currentAbility}</span></div>` +
+    `<div></div><div>${b.position.short} ${b.name} <span class="cmp-ca">CA ${b.hidden.currentAbility}</span></div></div>` + rows;
+}
+function renderCompare() {
+  if (!season) return;
+  const roster = [...season.rosterFor(season.userClub)].sort((a, b) => a.position.number - b.position.number);
+  if (roster.length < 2) return;
+  fillCompareSelect($("compareA") as HTMLSelectElement, roster, roster[0].id);
+  fillCompareSelect($("compareB") as HTMLSelectElement, roster, roster[1].id);
+  renderCompareGrid();
+  showView("compare");
+}
+$("compareBtn").addEventListener("click", renderCompare);
+$("compareBack").addEventListener("click", () => renderSeason());
+$("compareA").addEventListener("change", renderCompareGrid);
+$("compareB").addEventListener("change", renderCompareGrid);
+
+// ---- RugbyPedia glossary (M16) ----
+function renderPedia() {
+  $("pediaBody").innerHTML = PEDIA.map(
+    (s) =>
+      `<section class="pedia-sec"><h3>${s.title}</h3>` +
+      s.entries.map((e) => `<div class="pedia-entry"><dt>${e.term}</dt><dd>${e.def}</dd></div>`).join("") +
+      `</section>`
+  ).join("");
+  showView("pedia");
+}
+$("pediaBtn").addEventListener("click", renderPedia);
+$("pediaBack").addEventListener("click", () => renderSeason());
 // the living pyramid: current tier & reputation per club short, for ALL 24 clubs,
 // evolving year on year (promotion/relegation move clubs between tiers).
 let tiers: Record<string, "allsvenskan" | "div1"> = {};
