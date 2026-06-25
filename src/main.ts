@@ -13,6 +13,7 @@ import { computeFinances, formatKr, type FinanceBreakdown } from "./engine/finan
 import { pitchCondition, attendance as crowdAttendance, type MatchEnvironment, type SponsorBoard } from "./engine/matchday";
 import { generateOffers, settleSponsors, type SponsorOffer } from "./engine/sponsors";
 import { generateRecruitPool, signingFee, type Recruit } from "./engine/recruitment";
+import { generateYouthIntake, type Prospect } from "./engine/youth";
 import {
   generateBoard, boardConfidence, moodLabel, holdVote, lobby, moveAgainst, updateBoard,
   type BoardMember, type CapitalProposal,
@@ -66,7 +67,8 @@ const newsView = $("newsView");
 const managerView = $("managerView");
 const clubView = $("clubView");
 const boardView = $("boardView");
-type ViewName = "career" | "season" | "match" | "squad" | "select" | "sevens" | "finances" | "sponsors" | "recruit" | "news" | "manager" | "club" | "board";
+const youthView = $("youthView");
+type ViewName = "career" | "season" | "match" | "squad" | "select" | "sevens" | "finances" | "sponsors" | "recruit" | "news" | "manager" | "club" | "board" | "youth";
 function showView(v: ViewName) {
   appView.classList.toggle("hidden", v !== "match");
   careerView.classList.toggle("hidden", v !== "career");
@@ -81,6 +83,7 @@ function showView(v: ViewName) {
   managerView.classList.toggle("hidden", v !== "manager");
   clubView.classList.toggle("hidden", v !== "club");
   boardView.classList.toggle("hidden", v !== "board");
+  youthView.classList.toggle("hidden", v !== "youth");
 }
 
 // ---- manager profile & career history ----
@@ -449,6 +452,59 @@ function signRecruit(i: number) {
 }
 $("recruitBtn").addEventListener("click", renderRecruitment);
 $("recruitBack").addEventListener("click", () => renderSeason());
+
+// ---- youth academy ----
+let youthIntake: Prospect[] = [];
+function refreshYouth() {
+  if (!season) return;
+  const user = season.userClub;
+  const rng = new Rng((seasonSeed * 9173 + season.year * 29) >>> 0);
+  youthIntake = generateYouthIntake(rng, user, season.repOf(user), currentFacilities(user), !!user.university, compositeFacilities());
+}
+function renderYouth() {
+  if (!season) return;
+  const user = season.userClub;
+  const roster = season.rosterFor(user);
+  const cap = Math.max(50, squadSize(season.repOf(user)) + 4);
+  $("youthSquad").textContent = `Squad ${roster.length}/${cap}`;
+  $("youthNote").textContent = `This year's academy graduates — raw but promising. A stronger club (reputation, facilities, a university link) brings through more, better youngsters. Promote them to the senior squad to develop them.`;
+  const full = roster.length >= cap;
+  $("youthBody").innerHTML = youthIntake.length
+    ? youthIntake
+        .map((pr, i) => {
+          const p = pr.player;
+          const btn = full ? `<span class="muted">Squad full</span>` : `<button class="primary-inline yp-promote" data-i="${i}">Promote</button>`;
+          return `<tr>
+            <td class="club">${p.position.short}</td>
+            <td class="club"><span class="full" style="color:var(--text)">${p.name}</span> <span class="tag">academy</span></td>
+            <td>${p.age}</td>
+            <td><span class="stars">${"★".repeat(pr.stars)}${"☆".repeat(5 - pr.stars)}</span></td>
+            <td><span class="stars pot">${"★".repeat(pr.potential)}${"☆".repeat(5 - pr.potential)}</span></td>
+            <td>${btn}</td>
+          </tr>`;
+        })
+        .join("")
+    : `<tr><td colspan="6" class="club"><span class="full muted">No graduates this year — invest in facilities & a university link to grow the academy.</span></td></tr>`;
+  youthView.querySelectorAll<HTMLButtonElement>(".yp-promote").forEach((b) =>
+    b.addEventListener("click", () => promoteYouth(Number(b.dataset.i))));
+  showView("youth");
+}
+function promoteYouth(i: number) {
+  if (!season || i < 0 || i >= youthIntake.length) return;
+  const user = season.userClub;
+  const roster = season.rosterFor(user);
+  const cap = Math.max(50, squadSize(season.repOf(user)) + 4);
+  if (roster.length >= cap) return;
+  const pr = youthIntake[i];
+  pr.player.number = (roster.reduce((m, p) => Math.max(m, p.number), 0) || roster.length) + 1;
+  roster.push(pr.player);
+  youthIntake.splice(i, 1);
+  logNews(`🎓 Promoted academy graduate ${pr.player.position.short} ${pr.player.name} (potential ${"★".repeat(pr.potential)}).`);
+  save();
+  renderYouth();
+}
+$("youthBtn").addEventListener("click", renderYouth);
+$("youthBack").addEventListener("click", () => renderSeason());
 // the living pyramid: current tier & reputation per club short, for ALL 24 clubs,
 // evolving year on year (promotion/relegation move clubs between tiers).
 let tiers: Record<string, "allsvenskan" | "div1"> = {};
@@ -870,6 +926,7 @@ function save() {
     signedSponsors,
     seasonStartRep,
     recruits: recruitPool.map((r) => ({ p: serializePlayer(r.player), bg: r.background, st: r.stars, pot: r.potential })),
+    youth: youthIntake.map((r) => ({ p: serializePlayer(r.player), st: r.stars, pot: r.potential })),
     news: news.slice(0, 120),
     managerName,
     careerHistory,
@@ -936,6 +993,11 @@ function load(): boolean {
       }));
     } else {
       refreshRecruits();
+    }
+    if (Array.isArray(d.youth)) {
+      youthIntake = d.youth.map((r: any) => ({ player: deserializePlayer(r.p), stars: r.st, potential: r.pot }));
+    } else {
+      refreshYouth();
     }
     news = Array.isArray(d.news) ? d.news : [];
     board = Array.isArray(d.board) && d.board.length ? d.board : generateBoard(new Rng((seasonSeed * 613 + 7) >>> 0));
@@ -1026,6 +1088,7 @@ function startCareer(club: Team) {
   oldBoys = [];
   refreshSponsors();
   refreshRecruits();
+  refreshYouth();
   logNews(`📅 ${managerName} takes charge of ${club.name} in ${divisionLabel(club)}.`);
   save();
   renderSeason();
@@ -1450,6 +1513,7 @@ function finalizeRollover() {
   gfTie = null;
   refreshSponsors();
   refreshRecruits();
+  refreshYouth();
   logNews(`📅 Year ${season.year}: ${divisionLabel(season.userClub)} season begins. Board confidence ${boardConfidence(board)}/100.`);
   save();
   renderSeason();

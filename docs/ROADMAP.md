@@ -172,6 +172,13 @@ refactor everything else needs).
     committee objectives/job security, multi-year deals, fundraising.
 - **M12 — Youth & academy.** Annual intake (newgens), minis/juniors, schools links,
   U18/U20, development centres, feeder/affiliate clubs.
+  - *Done (academy):* a **youth academy** producing a class of graduates each
+    season — raw 16–19-year-olds whose number & promise scale with the club's
+    reputation, facilities and a **university link**. An Academy screen shows each
+    with low current-ability but a higher **potential** star rating; promote the
+    ones you fancy into the senior squad to develop (`youth.ts`). Closes the loop
+    facilities → academy → talent. *Still to do:* U18/U20 squads, schools,
+    feeder clubs.
 - **M13 — Competitions & game world.** Full Swedish pyramid + promotion/relegation,
   cups, Grand Final, Nordic Cup, Sevens series; then Denmark/Norway/Germany/USA
   leagues; women's rugby; national-team management.
