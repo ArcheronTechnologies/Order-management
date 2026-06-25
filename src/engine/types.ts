@@ -76,6 +76,8 @@ export interface Player {
   nationality: string; // "Sweden" for locals; a rugby nation for overseas students
   /** overseas student on a 1–3 year stint (undefined for locals). */
   studentYearsLeft?: number;
+  /** change in current ability over the most recent pre-season (for the UI). */
+  lastDevDelta?: number;
   position: PositionDef;
   forward: boolean;
   attr: Attributes;

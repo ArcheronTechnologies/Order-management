@@ -96,7 +96,13 @@ export class Season {
   year = 1;
   round = 1; // next round to play
 
-  constructor(clubs: Team[], userClub: Team, seed: number, state: SeasonState = {}) {
+  constructor(
+    clubs: Team[],
+    userClub: Team,
+    seed: number,
+    state: SeasonState = {},
+    carry?: Map<Team, Player[]>
+  ) {
     this.clubs = clubs;
     this.userClub = userClub;
     this.seed = seed;
@@ -106,9 +112,13 @@ export class Season {
     clubs.forEach((c, i) => {
       const rep = state.reputation?.[c.short] ?? c.reputation;
       this.reputation.set(c, rep);
+      // a carried-over roster (persistent players across years) takes precedence;
+      // otherwise generate a fresh reputation-scaled squad from the seed
+      const carried = carry?.get(c);
       this.rosters.set(
         c,
-        buildSquad(new Rng((seed * 1000 + i * 97 + 13) >>> 0), c, "home", FORMATS.union, squadSize(rep), rep)
+        carried ??
+          buildSquad(new Rng((seed * 1000 + i * 97 + 13) >>> 0), c, "home", FORMATS.union, squadSize(rep), rep)
       );
     });
   }

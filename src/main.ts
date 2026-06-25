@@ -6,7 +6,8 @@ import { PRESETS, type TeamTactics } from "./engine/tactics";
 import { Season, quickSim, type Fixture } from "./engine/season";
 import { Rng } from "./engine/rng";
 import type { Team } from "./engine/teams";
-import { UNION_POSITIONS, setRole } from "./engine/teams";
+import { UNION_POSITIONS, setRole, serializePlayer, deserializePlayer } from "./engine/teams";
+import { developSquad, type SeasonDevelopment } from "./engine/development";
 import type { Player } from "./engine/types";
 import {
   rollAvailability,
@@ -246,19 +247,8 @@ function save() {
     results: season.fixtures
       .filter((f) => f.played)
       .map((f) => ({ r: f.round, h: f.home.short, a: f.away.short, hs: f.homeScore, as: f.awayScore, ht: f.homeTries, at: f.awayTries })),
-    // player condition for your club (in roster order — stable across reloads)
-    condition: season.rosterFor(season.userClub).map((p) => [
-      Math.round(p.condition.fitness),
-      Math.round(p.condition.sharpness),
-      Math.round(p.condition.morale),
-      p.condition.injuredWeeks,
-    ]),
-    // your chosen squad roles (ids are stable as rosters regenerate from seed)
-    roles: {
-      c: season.rosterFor(season.userClub).find((p) => p.isCaptain)?.id,
-      gk: season.rosterFor(season.userClub).find((p) => p.isGoalKicker)?.id,
-      ll: season.rosterFor(season.userClub).find((p) => p.isLineoutLeader)?.id,
-    },
+    // your club's full squad — persistent players carry across years (dev/aging)
+    roster: season.rosterFor(season.userClub).map(serializePlayer),
   };
   localStorage.setItem(SAVE_KEY, JSON.stringify(data));
 }
@@ -271,20 +261,25 @@ function load(): boolean {
     const user = CLUBS.find((c) => c.short === d.userShort);
     if (!user) return false;
     seasonSeed = d.seed;
-    season = new Season(divisionFor(user), user, seasonSeed, { reputation: d.reputation, year: d.year });
+    // carry the saved persistent squad so years of development survive a reload
+    const carry = Array.isArray(d.roster)
+      ? new Map<Team, Player[]>([[user, d.roster.map(deserializePlayer)]])
+      : undefined;
+    season = new Season(divisionFor(user), user, seasonSeed, { reputation: d.reputation, year: d.year }, carry);
     season.round = d.round;
     userTactics = d.tactics ?? { ...PRESETS[0].tactics };
     for (const r of d.results ?? []) {
       const f = season.fixtures.find((x) => x.round === r.r && x.home.short === r.h && x.away.short === r.a);
       if (f) season.record(f, r.hs, r.as, r.ht, r.at);
     }
-    if (Array.isArray(d.condition)) {
+    // legacy saves (pre-roster persistence): re-apply condition & role overrides
+    if (!carry && Array.isArray(d.condition)) {
       const roster = season.rosterFor(user);
       d.condition.forEach((c: number[], i: number) => {
         if (roster[i]) roster[i].condition = { fitness: c[0], sharpness: c[1], morale: c[2], injuredWeeks: c[3] };
       });
     }
-    if (d.roles) {
+    if (!carry && d.roles) {
       const roster = season.rosterFor(user);
       if (d.roles.c != null) setRole(roster, "isCaptain", d.roles.c);
       if (d.roles.gk != null) setRole(roster, "isGoalKicker", d.roles.gk);
@@ -331,6 +326,18 @@ function renderDressingRoom() {
     return;
   }
   const parts: string[] = [];
+  // pre-season development summary (shown the first view of a new year)
+  if (lastDev && (lastDev.retirements.length || lastDev.departures.length || lastDev.intake.length || lastDev.risers.length)) {
+    const seg: string[] = [];
+    if (lastDev.retirements.length) seg.push(`${lastDev.retirements.length} retired`);
+    const moved = lastDev.departures.filter((d) => d.reason.startsWith("moved"));
+    const returned = lastDev.departures.filter((d) => !d.reason.startsWith("moved"));
+    if (moved.length) seg.push(`${moved.length} left for bigger clubs`);
+    if (returned.length) seg.push(`${returned.length} students returned home`);
+    if (lastDev.intake.length) seg.push(`${lastDev.intake.length} joined`);
+    if (lastDev.risers.length) seg.push(`rising: ${lastDev.risers.slice(0, 3).map((p) => p.name).join(", ")}`);
+    if (seg.length) parts.push(`📋 Pre-season: ${seg.join(" · ")}.`);
+  }
   // only surface players who genuinely mind being left out (not the mildly annoyed)
   const serious = lastSnubs.filter((s) => s.severity !== "annoyed");
   if (serious.length) {
@@ -438,14 +445,20 @@ playRoundBtn.addEventListener("click", () => {
   }
 });
 
+let lastDev: SeasonDevelopment | null = null; // pre-season changes, surfaced in the season view
 function startNextSeason() {
   if (!season) return;
   season.endSeasonReputation();
   const reputation = season.reputationState();
   const year = season.year + 1;
   const user = season.userClub;
+  // roll the user's squad forward a year: develop/age, retire, intake
+  const devRng = new Rng((seasonSeed * 2654435761 + year) >>> 0);
+  lastDev = developSquad(season.rosterFor(user), devRng, user, reputation[user.short] ?? user.reputation);
+  const carry = new Map<Team, Player[]>([[user, lastDev.roster]]);
   seasonSeed = (seasonSeed * 1103515245 + 12345) >>> 0;
-  season = new Season(divisionFor(user), user, seasonSeed, { reputation, year });
+  season = new Season(divisionFor(user), user, seasonSeed, { reputation, year }, carry);
+  lastSnubs = [];
   save();
   renderSeason();
 }
@@ -586,6 +599,7 @@ function finishUserMatch() {
   // game-time morale: starters lift, snubbed fringe players stew
   const won = match.score[userSide] > match.score[userSide === "home" ? "away" : "home"];
   lastSnubs = applySelectionMorale(season.rosterFor(season.userClub), won);
+  lastDev = null; // pre-season summary clears once the season is under way
   // your XV tire & risk knocks; then the whole league recovers a week
   applyPostMatch(season.rosterFor(season.userClub), (availSeed * 13 + 9) >>> 0);
   for (const c of season.clubs) applyWeeklyRecovery(season.rosterFor(c));

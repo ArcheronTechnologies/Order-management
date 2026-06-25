@@ -243,7 +243,7 @@ const STUDENT_NATIONS: { nation: string; forenames: string[]; surnames: string[]
 ];
 
 /** A strong overseas student on a 1–3 year stint — clearly above the league. */
-function makeStudent(rng: Rng, team: Team, pos: PositionDef, number: number): Player {
+export function makeStudent(rng: Rng, team: Team, pos: PositionDef, number: number): Player {
   const src = rng.pick(STUDENT_NATIONS);
   const age = rng.int(19, 24);
   // students come from rugby nations: a clear ability boost over the local league
@@ -383,4 +383,66 @@ export function setRole(
   for (const p of squad) p[role] = false;
   const p = squad.find((q) => q.id === playerId);
   if (p) p[role] = true;
+}
+
+/** Generate `count` fresh young recruits/newgens (age 18–21) for an annual intake. */
+export function recruitPlayers(
+  rng: Rng,
+  team: Team,
+  count: number,
+  shirtStart: number
+): Player[] {
+  const positions = UNION_POSITIONS;
+  const bag: number[] = [];
+  positions.forEach((_, i) => {
+    for (let w = 0; w < (UNION_DEPTH_WEIGHT[i] ?? 2); w++) bag.push(i);
+  });
+  const out: Player[] = [];
+  let shirt = shirtStart;
+  for (let k = 0; k < count; k++) {
+    const pos = positions[bag[Math.floor(rng.next() * bag.length)]];
+    const p = makePlayer(rng, team, "home", pos, shirt++, false);
+    p.age = rng.int(18, 21); // newgens come through young
+    p.hidden = makeHidden(rng, p.attr, p.age);
+    p.person = makePerson(rng, pos, p.hidden);
+    out.push(p);
+  }
+  return out;
+}
+
+/** A university intake of `count` overseas students at impact positions. */
+export function recruitStudents(rng: Rng, team: Team, count: number, shirtStart: number): Player[] {
+  const impact = [9, 10, 11, 12, 13, 7, 4, 5];
+  const out: Player[] = [];
+  let shirt = shirtStart;
+  for (let s = 0; s < count; s++) {
+    const pos = UNION_POSITIONS[impact[Math.floor(rng.next() * impact.length)]];
+    out.push(makeStudent(rng, team, pos, shirt++));
+  }
+  return out;
+}
+
+/** Compact a player to a JSON-safe object (position stored by shirt number). */
+export function serializePlayer(p: Player): unknown {
+  return {
+    id: p.id, number: p.number, name: p.name, age: p.age, nationality: p.nationality,
+    studentYearsLeft: p.studentYearsLeft, lastDevDelta: p.lastDevDelta,
+    pos: p.position.number, attr: p.attr, hidden: p.hidden, person: p.person,
+    condition: p.condition,
+    isCaptain: p.isCaptain, isGoalKicker: p.isGoalKicker, isLineoutLeader: p.isLineoutLeader,
+  };
+}
+
+/** Rebuild a Player from serializePlayer output. */
+export function deserializePlayer(o: any): Player {
+  const pos = UNION_POSITIONS.find((q) => q.number === o.pos) ?? UNION_POSITIONS[0];
+  if (o.id >= nextId) nextId = o.id + 1; // keep id generator ahead of loaded ids
+  return {
+    id: o.id, side: "home", number: o.number, name: o.name, age: o.age,
+    nationality: o.nationality, studentYearsLeft: o.studentYearsLeft, lastDevDelta: o.lastDevDelta,
+    position: pos, forward: pos.forward, attr: o.attr, hidden: o.hidden, person: o.person,
+    condition: o.condition,
+    isCaptain: o.isCaptain, isGoalKicker: o.isGoalKicker, isLineoutLeader: o.isLineoutLeader,
+    onField: false, x: 0, y: 0, fatigue: 0,
+  };
 }

@@ -54,6 +54,16 @@ refactor everything else needs).
   team-selection screen (XV + bench from available players).
 - **M6 — Training & development.** Schedules/intensity (amateur-capped), individual
   focuses, retraining, mentoring; CA→PA development, aging & retirement.
+  - *Done (core):* **persistent players across years** — your squad now carries
+    over and is rolled forward each pre-season: the young grow toward potential
+    (faster if professional/determined), the prime hold, veterans decline and
+    **retire**; **students leave** when their stint ends and **glory-hunters
+    leave low-reputation clubs** for bigger ones; a **youth intake** (and fresh
+    students for uni clubs) tops the squad back to its reputation-scaled size.
+    Visible attributes track ability changes; a pre-season summary shows
+    retirements / departures / arrivals / risers (`development.ts`, full user
+    roster persisted in saves). *Still to do:* training schedules, individual
+    focuses, mentoring, coaches.
 - **M7 — Morale, squad dynamics & player interaction.** Morale/concerns/promises;
   hierarchy/social groups/leaders/dressing room; 1‑on‑1s & praise/criticism;
   captain / goal-kicker / set-piece taker; team talks.
