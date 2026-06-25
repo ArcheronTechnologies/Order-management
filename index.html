@@ -79,6 +79,7 @@
         <div class="controls">
           <span id="seasonRound" class="round-pill"></span>
           <button id="squadBtn">Squad</button>
+          <button id="recruitBtn">Recruit</button>
           <button id="financesBtn">Finances</button>
           <button id="sponsorsBtn">Sponsors</button>
           <button id="sevensBtn">Sevens Cup</button>
@@ -132,6 +133,25 @@
           <h2 class="unavail-h">Unavailable</h2>
           <ul id="unavailList" class="avail-list out"></ul>
         </section>
+      </div>
+    </div>
+
+    <div id="recruitView" class="view hidden">
+      <header class="topbar">
+        <h1>Fly-Half <span class="sub">recruitment</span></h1>
+        <div class="controls">
+          <span id="recruitSquad" class="round-pill"></span>
+          <button id="recruitBack">‹ Season</button>
+        </div>
+      </header>
+      <p class="select-note" id="recruitNote"></p>
+      <div class="panel squad-panel">
+        <table class="ladder squad-table">
+          <thead>
+            <tr><th>Pos</th><th>Name</th><th>Age</th><th>Type</th><th>Ability</th><th>Potential</th><th>Fee</th><th></th></tr>
+          </thead>
+          <tbody id="recruitBody"></tbody>
+        </table>
       </div>
     </div>
 

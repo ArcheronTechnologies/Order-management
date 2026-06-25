@@ -116,6 +116,14 @@ refactor everything else needs).
     *Still to do:* follow-ball camera/zoom, view modes.
 - **M10 — Recruitment, retention & staff.** Local catchment, uni links, walk-ups,
   trials; scouting reports/shortlists; retention vs life-pull; volunteer staff.
+  - *Done (recruitment):* an amateur **free-agent / walk-up pool** refreshed each
+    season — local lads, walk-ups, trialists, returning students and the odd
+    ex-pro, with pool quality scaled by the club's pulling power (reputation).
+    A Recruitment screen lists each with background, age and **scouted ability &
+    potential star ratings**; sign them into the squad (free in the amateur game,
+    a small signing-on fee at the semi-pro top tier) up to a squad cap
+    (`recruitment.ts`). *Still to do:* deeper scouting reports/shortlists,
+    retention vs life-pull, volunteer staff.
 - **M11 — Club operations, finances & committee.** Costs vs income; semi-pro
   budgets; committee confidence/objectives/job security; vision; facilities.
   - *Done (finances):* a **club bank balance** carried across years, settled each

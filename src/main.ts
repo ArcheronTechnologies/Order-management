@@ -7,11 +7,12 @@ import { Season, quickSim, simStandings, type Fixture } from "./engine/season";
 import { FORMATS } from "./engine/formats";
 import { Rng } from "./engine/rng";
 import type { Team } from "./engine/teams";
-import { UNION_POSITIONS, setRole, serializePlayer, deserializePlayer, buildSquad } from "./engine/teams";
+import { UNION_POSITIONS, setRole, serializePlayer, deserializePlayer, buildSquad, squadSize } from "./engine/teams";
 import { SevensCup, sevensLineup, cupEntrants, ROUND_NAMES, type SevensTie } from "./engine/sevens";
 import { computeFinances, committeeMood, formatKr, facilityUpgradeCost, type FinanceBreakdown } from "./engine/finances";
 import { pitchCondition, attendance as crowdAttendance, type MatchEnvironment, type SponsorBoard } from "./engine/matchday";
 import { generateOffers, settleSponsors, type SponsorOffer } from "./engine/sponsors";
+import { generateRecruitPool, signingFee, type Recruit } from "./engine/recruitment";
 import { developSquad, type SeasonDevelopment } from "./engine/development";
 import {
   applyTraining,
@@ -56,7 +57,8 @@ const selectView = $("selectView");
 const sevensView = $("sevensView");
 const financesView = $("financesView");
 const sponsorsView = $("sponsorsView");
-type ViewName = "career" | "season" | "match" | "squad" | "select" | "sevens" | "finances" | "sponsors";
+const recruitView = $("recruitView");
+type ViewName = "career" | "season" | "match" | "squad" | "select" | "sevens" | "finances" | "sponsors" | "recruit";
 function showView(v: ViewName) {
   appView.classList.toggle("hidden", v !== "match");
   careerView.classList.toggle("hidden", v !== "career");
@@ -66,6 +68,7 @@ function showView(v: ViewName) {
   sevensView.classList.toggle("hidden", v !== "sevens");
   financesView.classList.toggle("hidden", v !== "finances");
   sponsorsView.classList.toggle("hidden", v !== "sponsors");
+  recruitView.classList.toggle("hidden", v !== "recruit");
 }
 
 // --- match view elements -------------------------------------------------
@@ -157,6 +160,74 @@ function refreshSponsors() {
   const rng = new Rng((seasonSeed * 7349 + season.year * 19) >>> 0);
   sponsorOffers = generateOffers(rng, season.repOf(user), currentTier(user), currentFacilities(user), season.clubs.length);
 }
+
+// ---- recruitment ----
+let recruitPool: Recruit[] = [];
+function refreshRecruits() {
+  if (!season) return;
+  const user = season.userClub;
+  const rng = new Rng((seasonSeed * 5179 + season.year * 23) >>> 0);
+  recruitPool = generateRecruitPool(rng, user, season.repOf(user), 8);
+}
+function stars(n: number): string {
+  return "★".repeat(n) + "☆".repeat(5 - n);
+}
+function renderRecruitment() {
+  if (!season) return;
+  const user = season.userClub;
+  const roster = season.rosterFor(user);
+  const cap = Math.max(50, squadSize(season.repOf(user)) + 4);
+  const tier = currentTier(user);
+  $("recruitSquad").textContent = `Squad ${roster.length}/${cap}`;
+  $("recruitNote").textContent =
+    `Sign free agents, walk-ups and trialists to bolster the squad. ` +
+    (tier === "allsvenskan" ? "A small signing-on fee applies at this level." : "No fees at this level — it's the amateur game.");
+  const full = roster.length >= cap;
+  $("recruitBody").innerHTML = recruitPool.length
+    ? recruitPool
+        .map((rec, i) => {
+          const p = rec.player;
+          const fee = signingFee(tier, rec.stars);
+          const canAfford = balance >= fee;
+          const btn = full
+            ? `<span class="muted">Squad full</span>`
+            : `<button class="primary-inline rec-sign" data-i="${i}" ${canAfford ? "" : "disabled"}>${fee > 0 ? `Sign (${formatKr(fee)})` : "Sign"}</button>`;
+          return `<tr>
+            <td class="club">${p.position.short}</td>
+            <td class="club"><span class="full" style="color:var(--text)">${p.name}</span> <span class="tag">${p.nationality !== "Sweden" ? p.nationality : rec.background}</span></td>
+            <td>${p.age}</td>
+            <td class="club"><span class="full" style="color:var(--muted)">${rec.background}</span></td>
+            <td title="current ability"><span class="stars">${stars(rec.stars)}</span></td>
+            <td title="potential"><span class="stars pot">${stars(rec.potential)}</span></td>
+            <td>${fee > 0 ? formatKr(fee) : "—"}</td>
+            <td>${btn}</td>
+          </tr>`;
+        })
+        .join("")
+    : `<tr><td colspan="8" class="club"><span class="full muted">No one's knocking on the clubhouse door right now.</span></td></tr>`;
+  recruitView.querySelectorAll<HTMLButtonElement>(".rec-sign").forEach((b) => {
+    b.addEventListener("click", () => signRecruit(Number(b.dataset.i)));
+  });
+  showView("recruit");
+}
+function signRecruit(i: number) {
+  if (!season || i < 0 || i >= recruitPool.length) return;
+  const user = season.userClub;
+  const roster = season.rosterFor(user);
+  const cap = Math.max(50, squadSize(season.repOf(user)) + 4);
+  if (roster.length >= cap) return;
+  const rec = recruitPool[i];
+  const fee = signingFee(currentTier(user), rec.stars);
+  if (balance < fee) return;
+  balance -= fee;
+  rec.player.number = (roster.reduce((m, p) => Math.max(m, p.number), 0) || roster.length) + 1;
+  roster.push(rec.player);
+  recruitPool.splice(i, 1);
+  save();
+  renderRecruitment();
+}
+$("recruitBtn").addEventListener("click", renderRecruitment);
+$("recruitBack").addEventListener("click", () => renderSeason());
 // the living pyramid: current tier & reputation per club short, for ALL 24 clubs,
 // evolving year on year (promotion/relegation move clubs between tiers).
 let tiers: Record<string, "allsvenskan" | "div1"> = {};
@@ -535,6 +606,7 @@ function save() {
     sponsorOffers,
     signedSponsors,
     seasonStartRep,
+    recruits: recruitPool.map((r) => ({ p: serializePlayer(r.player), bg: r.background, st: r.stars, pot: r.potential })),
     tactics: userTactics,
     results: season.fixtures
       .filter((f) => f.played)
@@ -575,6 +647,13 @@ function load(): boolean {
       seasonStartRep = d.seasonStartRep ?? Math.round(season.repOf(user));
     } else {
       refreshSponsors();
+    }
+    if (Array.isArray(d.recruits)) {
+      recruitPool = d.recruits.map((r: any) => ({
+        player: deserializePlayer(r.p), background: r.bg, stars: r.st, potential: r.pot,
+      }));
+    } else {
+      refreshRecruits();
     }
     userTactics = d.tactics ?? { ...PRESETS[0].tactics };
     trainingPlan = d.training ?? { ...DEFAULT_TRAINING };
@@ -646,6 +725,7 @@ function startCareer(club: Team) {
   nationalChamp = null;
   gfTie = null;
   refreshSponsors();
+  refreshRecruits();
   save();
   renderSeason();
 }
@@ -999,6 +1079,7 @@ function finalizeRollover() {
   nationalChamp = null;
   gfTie = null;
   refreshSponsors();
+  refreshRecruits();
   save();
   renderSeason();
 }

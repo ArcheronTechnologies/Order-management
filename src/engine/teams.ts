@@ -144,7 +144,7 @@ function personalityLabel(p: PersonalityInputs): string {
   return "Realist";
 }
 
-function makeHidden(rng: Rng, attr: Attributes, age: number): HiddenAttributes {
+export function makeHidden(rng: Rng, attr: Attributes, age: number): HiddenAttributes {
   const avg = Object.values(attr).reduce((a, b) => a + b, 0) / Object.keys(attr).length;
   const currentAbility = clampAttr100(Math.round(avg * 4.5 + rng.range(-6, 6)));
   // younger players have more headroom to grow
@@ -201,7 +201,7 @@ function makePerson(rng: Rng, pos: PositionDef, hidden: HiddenAttributes): Perso
   };
 }
 
-function makePlayer(
+export function makePlayer(
   rng: Rng,
   team: Team,
   side: Side,
