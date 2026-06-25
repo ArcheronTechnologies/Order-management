@@ -92,6 +92,13 @@ refactor everything else needs).
 - **M8 — Deeper tactics & set-piece creator.** Roles & duties per position;
   in-possession / transition / out-of-possession instructions; opposition
   instructions; familiarity; a set-piece creator; shouts & mentality.
+  - *Done (set-piece creator):* discrete set-piece calls in the tactics drawer
+    that feed the engine — **lineout** (full vs short line → safer ball),
+    **scrum** (steady / channel-one quick ball / pushover → a real try threat near
+    the line) and **restart** (long vs contest → kick short and try to win it
+    back). Wired into the scrum/lineout/kickoff resolution (`tactics.ts`,
+    `match.ts`). *Still to do:* per-position roles & duties, opposition
+    instructions, phase-split instructions, familiarity.
 - **M9 — Match-day presentation & in-match management.** Follow-ball camera/zoom;
   highlights/commentary/full view modes; broadcast overlays; live stats
   (possession, territory, an xPoints analogue); substitutions UI.

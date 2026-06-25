@@ -27,6 +27,14 @@ export interface TeamTactics {
   ruckCommitment: number;
   /** 0 fast off-the-top set-piece ball … 100 drive & maul for power. */
   setPieceFocus: number;
+
+  // ---- set-piece creator (discrete calls) ----
+  /** lineout: a short line is safer ball; a full line offers more but is contestable. */
+  lineoutThrow?: "short" | "full";
+  /** scrum: steady safe ball, quick channel-one ball, or a pushover shove near the line. */
+  scrumCall?: "steady" | "quick" | "pushover";
+  /** kickoff/restart: a long safe kick, or contest it and try to win it back. */
+  kickoffCall?: "long" | "contest";
 }
 
 export const DEFAULT_TACTICS: TeamTactics = {
@@ -39,7 +47,24 @@ export const DEFAULT_TACTICS: TeamTactics = {
   tempo: 50,
   ruckCommitment: 50,
   setPieceFocus: 50,
+  lineoutThrow: "full",
+  scrumCall: "steady",
+  kickoffCall: "long",
 };
+
+export const LINEOUT_CALLS: { v: NonNullable<TeamTactics["lineoutThrow"]>; label: string; blurb: string }[] = [
+  { v: "full", label: "Full line", blurb: "Standard — more options, but the throw can be contested." },
+  { v: "short", label: "Short line", blurb: "Fewer jumpers, safer ball — harder to steal, fewer plays off it." },
+];
+export const SCRUM_CALLS: { v: NonNullable<TeamTactics["scrumCall"]>; label: string; blurb: string }[] = [
+  { v: "steady", label: "Steady", blurb: "Win it cleanly and play." },
+  { v: "quick", label: "Channel one", blurb: "Fast ball off the base — quicker to launch, a touch looser." },
+  { v: "pushover", label: "Pushover", blurb: "Shove for the line — a try threat near it, but riskier ball." },
+];
+export const KICKOFF_CALLS: { v: NonNullable<TeamTactics["kickoffCall"]>; label: string; blurb: string }[] = [
+  { v: "long", label: "Long", blurb: "Kick deep, concede possession, win territory." },
+  { v: "contest", label: "Contest", blurb: "Shorter, chase hard and try to win it back — high risk/reward." },
+];
 
 export const ATTACK_FORMATIONS: AttackFormation[] = ["1-3-3-1", "2-4-2", "1-3-2-2"];
 export const DEFENSIVE_SYSTEMS: DefensiveSystem[] = ["drift", "blitz", "umbrella"];

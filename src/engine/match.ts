@@ -359,10 +359,22 @@ export class Match {
       fb.y = PITCH.width / 2;
     }
 
-    // launch the ball as a contestable kick toward the receivers
     this.ball.carrier = null;
     this.ball.x = HALFWAY;
     this.ball.y = PITCH.width / 2 + this.rng.range(-15, 15);
+    // a CONTEST call kicks short and chases hard to win it back — resolved as a
+    // 50/50-ish aerial contest rather than a deep, conceded kick
+    if (this.tactics[kicking].kickoffCall === "contest") {
+      const won = this.rng.chance(0.34);
+      const gatherer = won ? kicking : receiving;
+      this.possession = gatherer;
+      this.ball.x = onPitch(HALFWAY + kdir * this.rng.range(11, 16));
+      this.ball.y = clamp(this.ball.y, 8, PITCH.width - 8);
+      this.say(won ? `${this.teamOf(kicking).short} contest the restart — and reclaim it!` : `${this.teamOf(kicking).short} contest the kickoff, but ${this.teamOf(receiving).short} hold on.`);
+      this.enterOpen(this.nearestOf(gatherer, this.ball.x, this.ball.y), true);
+      return;
+    }
+    // standard restart: a deep contestable kick toward the receivers
     const targetX = HALFWAY + kdir * this.rng.range(22, 32);
     const targetY = clamp(this.ball.y + this.rng.range(-12, 12), 6, PITCH.width - 6);
     this.launchBall(targetX, targetY, KICK_SPEED * 0.7, true, null);
@@ -1263,8 +1275,11 @@ export class Match {
     const putIn = sp.putIn;
     const def = this.opp(putIn);
     const edge = this.packPower(putIn, "scrummaging") - this.packPower(def, "scrummaging");
-    // put-in side strongly favoured; a dominant pack can win against the head
-    const winP = clamp(0.8 + edge / 70, 0.55, 0.96);
+    const call = this.tactics[putIn].scrumCall ?? "steady";
+    // put-in side strongly favoured; a dominant pack can win against the head.
+    // a pushover or quick channel-ball is a touch looser than steady ball.
+    const callRisk = call === "pushover" ? 0.05 : call === "quick" ? 0.025 : 0;
+    const winP = clamp(0.8 + edge / 70 - callRisk, 0.5, 0.96);
     let winner = putIn;
     if (!this.rng.chance(winP)) {
       winner = def;
@@ -1272,9 +1287,13 @@ export class Match {
     }
     if (winner === putIn) this.stats[putIn].scrumWon++;
     else this.stats[putIn].scrumLost++;
-    // a dominant put-in pack right on the line can shove over for a try
+    // a dominant put-in pack right on the line can shove over for a try; calling a
+    // pushover makes it far more likely (with weaker requirements)
     const line = attackingLine(putIn);
-    if (winner === putIn && Math.abs(line - sp.x) < 6 && edge > 8 && this.rng.chance(0.35)) {
+    const pushReach = call === "pushover" ? 9 : 6;
+    const pushEdge = call === "pushover" ? -2 : 8;
+    const pushChance = call === "pushover" ? 0.55 : 0.35;
+    if (winner === putIn && Math.abs(line - sp.x) < pushReach && edge > pushEdge && this.rng.chance(pushChance)) {
       const n8 = this.nearestOf(putIn, sp.x, sp.y);
       this.say(`Pushover try! ${this.teamOf(putIn).short} drive it over.`);
       this.debug.tryPush++;
@@ -1294,10 +1313,12 @@ export class Match {
     const def = this.opp(throwIn);
     // a recognised lineout caller/jumper on the field steadies the throwing side
     const leaderOn = this.side(throwIn).some((p) => p.isLineoutLeader);
+    const shortLine = this.tactics[throwIn].lineoutThrow === "short";
     const edge =
       this.packPower(throwIn, "lineoutJump") - this.packPower(def, "lineoutJump") +
       (this.hookerThrow(throwIn) - 10) * 0.5 +
-      (leaderOn ? 4 : 0);
+      (leaderOn ? 4 : 0) +
+      (shortLine ? 8 : 0); // fewer jumpers to contest — much safer ball
     const winP = clamp(0.82 + edge / 70, 0.5, 0.96);
     let winner = throwIn;
     if (!this.rng.chance(winP)) {

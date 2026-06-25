@@ -5,6 +5,9 @@ import {
   DEFENSIVE_SYSTEMS,
   FORMATION_BLURB,
   SYSTEM_BLURB,
+  LINEOUT_CALLS,
+  SCRUM_CALLS,
+  KICKOFF_CALLS,
   type TeamTactics,
   type AttackFormation,
   type DefensiveSystem,
@@ -116,7 +119,43 @@ export function createTacticsPanel(onChange: (t: TeamTactics) => void): TacticsP
     sliderInputs.set(s.key, input);
   }
 
+  // --- set-piece calls ---
+  const setPieceEl = $("setPieceCalls");
+  const callGroups: { key: keyof TeamTactics; title: string; opts: { v: string; label: string; blurb: string }[] }[] = [
+    { key: "lineoutThrow", title: "Lineout", opts: LINEOUT_CALLS },
+    { key: "scrumCall", title: "Scrum", opts: SCRUM_CALLS },
+    { key: "kickoffCall", title: "Restart", opts: KICKOFF_CALLS },
+  ];
+  for (const g of callGroups) {
+    const wrap = document.createElement("div");
+    wrap.className = "callgroup";
+    const row = document.createElement("div");
+    row.className = "btnrow";
+    g.opts.forEach((o) => {
+      const b = document.createElement("button");
+      b.textContent = o.label;
+      b.dataset.call = `${String(g.key)}:${o.v}`;
+      b.title = o.blurb;
+      b.addEventListener("click", () => {
+        (state[g.key] as string) = o.v;
+        presetSel.value = "";
+        render();
+        emit();
+      });
+      row.appendChild(b);
+    });
+    const head = document.createElement("div");
+    head.className = "callgroup-head";
+    head.textContent = g.title;
+    wrap.append(head, row);
+    setPieceEl.appendChild(wrap);
+  }
+
   function render() {
+    setPieceEl.querySelectorAll<HTMLButtonElement>("button").forEach((b) => {
+      const [key, v] = (b.dataset.call ?? "").split(":");
+      b.classList.toggle("active", (state[key as keyof TeamTactics] ?? "") === v);
+    });
     formationBtns.querySelectorAll("button").forEach((b) => {
       b.classList.toggle("active", (b as HTMLElement).dataset.formation === state.attackFormation);
     });
