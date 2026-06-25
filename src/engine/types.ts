@@ -2,22 +2,50 @@ export type Side = "home" | "away";
 
 /** FM-style 1–20 attributes. */
 export interface Attributes {
+  // core
   pace: number; // top running speed
+  strength: number; // break/win contact
+  stamina: number; // resists fatigue
   handling: number; // passing & catching, fewer knock-ons
   tackling: number; // tackle completion
   kicking: number; // distance & goal accuracy
-  strength: number; // break tackles, win contact
-  stamina: number; // resists fatigue
+  decisionMaking: number; // shrewd pass/kick/run choices
+  positioning: number; // defensive read, covering, support lines
+  discipline: number; // fewer penalties conceded
+  // set piece
+  scrummaging: number; // front row / pack shove
+  lineoutJump: number; // winning lineout ball in the air
+  throwing: number; // hooker's lineout throw accuracy
+}
+
+export const ATTRIBUTE_KEYS: (keyof Attributes)[] = [
+  "pace", "strength", "stamina", "handling", "tackling", "kicking",
+  "decisionMaking", "positioning", "discipline",
+  "scrummaging", "lineoutJump", "throwing",
+];
+
+/** A positional role within a squad (drives attribute weighting & shirt no.). */
+export interface PositionDef {
+  number: number; // shirt number
+  name: string; // "Loosehead Prop"
+  short: string; // "LHP"
+  forward: boolean;
+  /** attribute biases (added to the club's base rating before rolling). */
+  weights: Partial<Record<keyof Attributes, number>>;
 }
 
 export interface Player {
   id: number;
   side: Side;
-  /** 1-based shirt number / positional id within the squad. */
+  /** shirt number; matches the starting position for on-field starters. */
   number: number;
   name: string;
+  age: number;
+  position: PositionDef;
   forward: boolean;
   attr: Attributes;
+  /** true while on the pitch (false on the bench). */
+  onField: boolean;
 
   // live match state (metres on the pitch)
   x: number;
@@ -50,6 +78,8 @@ export type Phase =
   | "open" // ball carrier running
   | "ruck" // tackle made, ball being recycled
   | "flight" // pass or kick in the air
+  | "scrum" // set piece after a knock-on / forward pass
+  | "lineout" // set piece after the ball goes to touch
   | "conversion" // shot at goal after a try
   | "penalty" // shot at goal from a penalty
   | "fulltime";

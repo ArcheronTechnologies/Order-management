@@ -1,35 +1,48 @@
 # Fly-Half
 
-A rugby management sim in the spirit of *Football Manager* — but for rugby, and
-deliberately without a fancy 3D match engine. Matches play out **top-down with
-dots** representing players, so all the depth lives in the simulation and (soon)
-the management layer rather than the graphics.
+An **amateur / semi-professional rugby club management sim** in the spirit of
+*Football Manager* — set in the **Swedish club rugby** system, and deliberately
+without a fancy 3D match engine. Matches play out **top-down with dots**, so all
+the depth lives in the simulation and (in time) the management layer.
 
-Supports both **Rugby Union (15-a-side)** and **Sevens (7-a-side)** on the same
-World Rugby pitch; the formats differ in squad size and match length, and the
-faster, more end-to-end feel of Sevens falls out naturally from having fewer
-defenders on a full-size field.
+The differentiator is *amateurism*: players have day jobs and lives, so
+availability, recruitment, finances, travel and morale — not money and big
+transfers — are the core tensions. The year mixes a summer **Union (15s)** league
+with **Sevens (7s)** tournament weekends.
+
+See `docs`/the plan for the full scope & roadmap.
 
 ## Status
 
-**Milestone 1 — the match engine** (current). A watchable, self-contained match:
+**Milestone 1 — match engine** ✅ and **Milestone 2 — match & tactics depth** (in
+progress). The match is a watchable, self-contained game of rugby:
 
-- Two procedurally generated squads with FM-style 1–20 attributes
-  (pace, handling, tackling, kicking, strength, stamina).
-- A possession-based simulation: carry, pass, kick for territory, tackles,
-  rucks, turnovers, knock-ons, interceptions.
-- Scoring: tries, conversions, and penalties, with goal kicks resolved from
-  distance and angle.
-- A live scoreboard, match clock with two halves, and a commentary feed.
+- Real **Swedish clubs** (Allsvenskan) with procedurally generated squads of
+  named, positioned players (1–15 / sevens roles) and **FM-style 1–20
+  attributes** — pace, strength, stamina, handling, tackling, kicking, decision
+  making, positioning, discipline, plus set-piece scrummaging/lineout/throwing.
+- **Team tactics** that visibly change how a side plays: defensive line speed &
+  aggression (drift vs blitz), attacking width, kicking game, tempo, ruck
+  commitment, set-piece focus.
+- **Realistic shape & flow**, researched from real rugby: forward **pods** and a
+  **backline at depth** in attack; a connected **defensive line** that fans from
+  the breakdown with **pillars** at the ruck and a **backfield** (fullback +
+  wing) dropped deep; per-phase plays (pick-and-go, pod carry, go wide, kick);
+  passing along the line; and mistakes on both sides (knock-ons, forward passes,
+  missed tackles, breakdown turnovers, interceptions, penalties).
+- **Set pieces**: scrums (with against-the-head and pushover tries) and lineouts
+  (steals, off-the-top ball or a catch-and-drive maul).
+- Scoring: tries, conversions, penalties; goal kicks resolved from distance/angle.
+- A live scoreboard, two-half match clock, and a commentary feed.
 - Deterministic and seeded, so any match can be replayed exactly.
 
-### Not yet built (planned)
+### Still to come
 
-- The management layer: clubs, leagues & fixtures, squad selection, training,
-  transfers, results tables.
-- Tactics that feed into the match engine (defensive line speed, kicking game,
-  width, etc.).
-- Persistence / save games.
+- **This milestone:** live touchline control (substitutions & in-match tactic
+  changes), a pre-match team-selection screen, set-piece visuals, and a Sevens
+  scoring balance pass.
+- **Later:** the management layer — season, fixtures & tables, the amateur
+  availability/jobs model, club finances, recruitment & youth — and save games.
 
 ## Running it
 
@@ -58,15 +71,17 @@ npm run typecheck  # type-check only
 ## How the match engine works
 
 The pitch is modelled in metres (120 × 70, including the two 10 m in-goal
-areas). Each tick (`Match.step`) advances play through a small state machine:
+areas). Each tick (`Match.step`) advances play through a state machine:
 
-`kickoff → flight → open → ruck → (open | turnover | penalty | conversion) → …`
+`kickoff → flight → open → ruck → (open | scrum | lineout | turnover | penalty | conversion) → …`
 
-Players steer toward simple targets — the carrier runs at the biggest gap,
-defenders press the ball or hold the line, support runners trail for the pass —
-and contact, contests, and goal kicks are resolved probabilistically from the
-players' attributes. The renderer (`src/render/renderer.ts`) just paints that
-state: pitch markings, coloured dots with shirt numbers, and the ball.
+At each breakdown a **play** is chosen from the side's tactics and field
+position, and during the ruck both teams pre-form their shape, so when the ball
+emerges the attack is in pods + a backline and the defence is a fanned line with
+pillars and a backfield. Contact, contests, set pieces and goal kicks are
+resolved probabilistically from the players' 1–20 attributes and the tactics.
+The renderer (`src/render/renderer.ts`) paints that state: pitch markings,
+coloured dots with shirt numbers, and the ball.
 
 ## Layout
 
@@ -74,10 +89,13 @@ state: pitch markings, coloured dots with shirt numbers, and the ball.
 src/
   engine/
     rng.ts        seedable PRNG (deterministic replays)
-    types.ts      Player / Ball / phase types
+    types.ts      Player / Ball / Position / phase types & attributes
     formats.ts    Union vs Sevens config + pitch geometry
-    teams.ts      squad generation & sample clubs
-    match.ts      the simulation state machine
+    teams.ts      positions, squad generation & Swedish player names
+    tactics.ts    team tactics sliders, presets & defaults
+    match.ts      the simulation state machine (shape, plays, set pieces)
+  data/
+    clubs.ts      the real Swedish Allsvenskan clubs
   render/
     renderer.ts   canvas rendering of the match state
   main.ts         game loop, controls, scoreboard, commentary

@@ -1,7 +1,7 @@
 import "./style.css";
 import { Match } from "./engine/match";
 import { Renderer } from "./render/renderer";
-import { SAMPLE_TEAMS } from "./engine/teams";
+import { CLUBS } from "./data/clubs";
 import type { FormatId } from "./engine/formats";
 
 const $ = <T extends HTMLElement>(id: string): T => {
@@ -32,7 +32,7 @@ let seed = 0x1a2b3c;
 let renderedCommentary = 0;
 
 function pickTeams(s: number): [number, number] {
-  const n = SAMPLE_TEAMS.length;
+  const n = CLUBS.length;
   const a = (s >>> 0) % n; // unsigned — large seeds must stay in range
   let b = (a + 1 + ((s >>> 3) % n)) % n;
   if (b === a) b = (b + 1) % n;
@@ -42,8 +42,8 @@ function pickTeams(s: number): [number, number] {
 function newMatch() {
   seed = (seed * 1664525 + 1013904223) >>> 0;
   const [hi, ai] = pickTeams(seed);
-  const home = SAMPLE_TEAMS[hi];
-  const away = SAMPLE_TEAMS[ai];
+  const home = CLUBS[hi];
+  const away = CLUBS[ai];
   match = new Match(seed, formatSel.value as FormatId, home, away);
   renderedCommentary = 0;
   eventsEl.innerHTML = "";
