@@ -50,7 +50,10 @@ export interface PersonProfile {
   commitment: number; // 1–20, turns up to train & play
   workFlexibility: number; // 1–20, can get time off for matches/travel
   injuryProneness: number; // 1–20
-  personality: string; // derived label (e.g. "Model professional")
+  loyalty: number; // 1–20, sticks with the club
+  ambition: number; // 1–20, wants to climb / move up
+  sociability: number; // 1–20, dressing-room & social life
+  personality: string; // derived FM-style label (e.g. "Club Loyalist")
   traits: string[]; // playing traits (e.g. "Offloads in the tackle")
   canPlay: string[]; // position shorts this player can cover
 }
@@ -70,6 +73,9 @@ export interface Player {
   number: number;
   name: string;
   age: number;
+  nationality: string; // "Sweden" for locals; a rugby nation for overseas students
+  /** overseas student on a 1–3 year stint (undefined for locals). */
+  studentYearsLeft?: number;
   position: PositionDef;
   forward: boolean;
   attr: Attributes;

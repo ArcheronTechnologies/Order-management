@@ -11,7 +11,18 @@ export interface Team {
   region: "north" | "south";
   /** overall club strength 1..20, biases generated attributes. */
   rating: number;
+  /** standing/prestige 1..100 — drives squad size & pulls player quality; evolves over years. */
+  reputation: number;
+  /** facilities level 1..5 (clubhouse, pitches, floodlights) — feeds reputation & youth. */
+  facilities: number;
+  /** in/near a university town — attracts strong overseas student players. */
+  university?: boolean;
   colors: { primary: string; secondary: string };
+}
+
+/** Number of players a club carries, scaled by reputation (bigger clubs, deeper squads). */
+export function squadSize(reputation: number): number {
+  return Math.max(30, Math.min(50, Math.round(28 + reputation * 0.22)));
 }
 
 // --- positional roles ------------------------------------------------------
@@ -45,9 +56,6 @@ export const SEVENS_POSITIONS: PositionDef[] = [
   { number: 7, name: "Wing", short: "WG", forward: false, weights: { pace: 5, handling: 1 } },
 ];
 
-// bench cover: which starting positions the replacements double up on
-const UNION_BENCH = [0, 1, 2, 3, 5, 8, 9, 11]; // FR, lock, back-row, 9, 10, centre
-const SEVENS_BENCH = [0, 1, 3, 4, 6];
 
 const FORENAMES = [
   "Erik", "Johan", "Anders", "Lars", "Karl", "Nils", "Gustav", "Oskar",
@@ -105,15 +113,33 @@ const JOBS = [
 const FWD_TRAITS = ["Big hitter", "Ball-carrying forward", "Hits rucks hard", "Dominant scrummager", "Lineout target", "Mauls well"];
 const BACK_TRAITS = ["Goose-steps", "Offloads in the tackle", "Sidesteps", "Box-kicks", "Places kicks well", "Steps off both feet", "Tries to beat the first man"];
 
-function personalityLabel(det: number, prof: number, commit: number): string {
-  const s = det + prof + commit;
-  if (prof >= 16 && det >= 15) return "Model professional";
-  if (s >= 48) return "Driven";
-  if (commit <= 7) return "Unreliable";
-  if (prof <= 8) return "Casual";
-  if (det >= 15) return "Determined";
-  if (s <= 24) return "Easy-going";
-  return "Balanced";
+interface PersonalityInputs {
+  det: number; prof: number; temp: number; commit: number;
+  loyalty: number; ambition: number; sociability: number;
+}
+
+/** FM-style personality, picked from the standout mental traits. */
+function personalityLabel(p: PersonalityInputs): string {
+  const { det, prof, temp, commit, loyalty, ambition, sociability } = p;
+  if (prof >= 17 && det >= 16) return "Model Professional";
+  if (prof >= 15 && det >= 13) return "Strict Professional";
+  if (loyalty >= 17 && ambition <= 12) return "Club Loyalist";
+  if (ambition >= 17 && loyalty <= 9) return "Mercenary";
+  if (det >= 15 && (det + ambition) >= 17 && sociability >= 13) return "Charismatic Leader";
+  if (ambition >= 16 && det >= 13) return "Ambitious";
+  if (det >= 17) return "Iron-Willed";
+  if (sociability >= 16 && prof <= 10) return "Party-goer";
+  if (sociability >= 15) return "Sociable";
+  if (temp <= 6) return "Volatile";
+  if (temp <= 9) return "Temperamental";
+  if (commit <= 6) return "Unreliable";
+  if (prof <= 7) return "Casual";
+  if (det >= 14) return "Determined";
+  if (det <= 7) return "Relaxed";
+  if (loyalty >= 14) return "Loyal";
+  if (prof >= 13) return "Professional";
+  if (commit >= 15 && prof >= 11) return "Spirited";
+  return "Realist";
 }
 
 function makeHidden(rng: Rng, attr: Attributes, age: number): HiddenAttributes {
@@ -139,10 +165,11 @@ function rngAttr(rng: Rng): number {
   return Math.max(1, Math.min(20, Math.round(rng.range(5, 17))));
 }
 
-function makePerson(rng: Rng, pos: PositionDef): PersonProfile {
-  const determination = rngAttr(rng);
-  const professionalism = rngAttr(rng);
+function makePerson(rng: Rng, pos: PositionDef, hidden: HiddenAttributes): PersonProfile {
   const commitment = rngAttr(rng);
+  const loyalty = rngAttr(rng);
+  const ambition = rngAttr(rng);
+  const sociability = rngAttr(rng);
   const pool = pos.forward ? FWD_TRAITS : BACK_TRAITS;
   const traits: string[] = [];
   const nTraits = rng.next() < 0.5 ? 0 : rng.next() < 0.7 ? 1 : 2;
@@ -150,16 +177,25 @@ function makePerson(rng: Rng, pos: PositionDef): PersonProfile {
     const t = rng.pick(pool);
     if (!traits.includes(t)) traits.push(t);
   }
-  // can cover adjacent positions of the same type
-  const canPlay = [pos.short];
   return {
     job: rng.pick(JOBS),
     commitment,
     workFlexibility: rngAttr(rng),
     injuryProneness: rngAttr(rng),
-    personality: personalityLabel(determination, professionalism, commitment),
+    loyalty,
+    ambition,
+    sociability,
+    personality: personalityLabel({
+      det: hidden.determination,
+      prof: hidden.professionalism,
+      temp: hidden.bigMatch,
+      commit: commitment,
+      loyalty,
+      ambition,
+      sociability,
+    }),
     traits,
-    canPlay,
+    canPlay: [pos.short],
   };
 }
 
@@ -173,19 +209,66 @@ function makePlayer(
 ): Player {
   const age = rng.int(18, 36);
   const attr = makeAttributes(rng, team.rating, pos);
+  const hidden = makeHidden(rng, attr, age);
   return {
     id: nextId++,
     side,
     number,
     name: `${rng.pick(FORENAMES)} ${rng.pick(SURNAMES)}`,
     age,
+    nationality: "Sweden",
     position: pos,
     forward: pos.forward,
     attr,
-    hidden: makeHidden(rng, attr, age),
-    person: makePerson(rng, pos),
+    hidden,
+    person: makePerson(rng, pos, hidden),
     condition: { fitness: 100, sharpness: rng.int(70, 100), morale: rng.int(55, 85), injuredWeeks: 0 },
     onField,
+    x: 0,
+    y: 0,
+    fatigue: 0,
+  };
+}
+
+// --- overseas student players (university clubs only) ---------------------
+const STUDENT_NATIONS: { nation: string; forenames: string[]; surnames: string[] }[] = [
+  { nation: "England", forenames: ["Harry", "Jack", "Oliver", "George", "Charlie", "Tom", "Will", "Sam"], surnames: ["Smith", "Jones", "Taylor", "Brown", "Wilson", "Roberts", "Hughes", "Carter"] },
+  { nation: "New Zealand", forenames: ["Tane", "Ari", "Manaia", "Kauri", "Nikau", "Rangi", "Hemi", "Te Ariki"], surnames: ["Ngata", "Walker", "Wī", "Thompson", "Brooke", "Savea", "Cooper", "Mahuta"] },
+  { nation: "South Africa", forenames: ["Pieter", "Johan", "Ruan", "Bongani", "Sipho", "Werner", "Jaco", "Thabo"], surnames: ["Van der Merwe", "Botha", "Nkosi", "Du Plessis", "Pretorius", "Mokoena", "Venter", "Dlamini"] },
+  { nation: "Australia", forenames: ["Liam", "Noah", "Cooper", "Lachlan", "Jett", "Kai", "Hunter", "Flynn"], surnames: ["Williams", "Murphy", "O'Brien", "Kelly", "Ryan", "Walsh", "Foster", "Hayes"] },
+  { nation: "Ireland", forenames: ["Cian", "Conor", "Eoin", "Fionn", "Oisín", "Darragh", "Rory", "Cormac"], surnames: ["Murphy", "Kelly", "O'Sullivan", "Byrne", "Ryan", "O'Connor", "Healy", "Doyle"] },
+  { nation: "Wales", forenames: ["Dylan", "Rhys", "Ioan", "Osian", "Tomos", "Gethin", "Carwyn", "Llŷr"], surnames: ["Jones", "Davies", "Williams", "Evans", "Thomas", "Roberts", "Lewis", "Morgan"] },
+  { nation: "France", forenames: ["Antoine", "Louis", "Hugo", "Théo", "Nathan", "Romain", "Baptiste", "Matthieu"], surnames: ["Dupont", "Martin", "Bernard", "Dubois", "Penaud", "Moreau", "Laurent", "Garnier"] },
+  { nation: "Fiji", forenames: ["Josua", "Semi", "Waisea", "Viliame", "Eroni", "Levani", "Api", "Jiuta"], surnames: ["Tuisova", "Radradra", "Nayacalevu", "Mata", "Volavola", "Kunatani", "Botia", "Naikadawa"] },
+];
+
+/** A strong overseas student on a 1–3 year stint — clearly above the league. */
+function makeStudent(rng: Rng, team: Team, pos: PositionDef, number: number): Player {
+  const src = rng.pick(STUDENT_NATIONS);
+  const age = rng.int(19, 24);
+  // students come from rugby nations: a clear ability boost over the local league
+  const boosted: Team = { ...team, rating: Math.min(20, team.rating + rng.int(4, 7)) };
+  const attr = makeAttributes(rng, boosted.rating, pos);
+  const hidden = makeHidden(rng, attr, age);
+  hidden.potentialAbility = Math.max(hidden.potentialAbility, hidden.currentAbility + rng.int(2, 10));
+  const person = makePerson(rng, pos, hidden);
+  person.ambition = Math.max(person.ambition, rng.int(13, 20)); // they move on
+  person.loyalty = Math.min(person.loyalty, rng.int(4, 11));
+  return {
+    id: nextId++,
+    side: "home",
+    number,
+    name: `${rng.pick(src.forenames)} ${rng.pick(src.surnames)}`,
+    age,
+    nationality: src.nation,
+    studentYearsLeft: rng.int(1, 3),
+    position: pos,
+    forward: pos.forward,
+    attr,
+    hidden,
+    person,
+    condition: { fitness: 100, sharpness: rng.int(70, 100), morale: rng.int(60, 90), injuredWeeks: 0 },
+    onField: false,
     x: 0,
     y: 0,
     fatigue: 0,
@@ -196,25 +279,57 @@ export function positionsFor(fmt: FormatConfig): PositionDef[] {
   return fmt.id === "sevens" ? SEVENS_POSITIONS : UNION_POSITIONS;
 }
 
+// how much cover each shirt tends to carry (front row, half-backs & back row deepest)
+const UNION_DEPTH_WEIGHT = [3, 3, 3, 3, 2, 3, 3, 2, 3, 3, 2, 2, 2, 2, 2];
+
 /**
- * A full matchday squad: the starting XV/VII (onField, shirts 1..N) followed by
- * the replacements bench (onField=false, shirts N+1..).
+ * A full club roster: one specialist per shirt (the spine, marked onField as a
+ * default XV) plus depth across the squad up to `size`, weighted toward the
+ * positions that need cover. Bigger (higher-reputation) clubs carry more.
  */
 export function buildSquad(
   rng: Rng,
   team: Team,
   side: Side,
-  fmt: FormatConfig
+  fmt: FormatConfig,
+  size?: number,
+  reputation: number = team.reputation
 ): Player[] {
   const positions = positionsFor(fmt);
+  // the spine: best of each position, onField as the default starting XV/VII
   const squad: Player[] = positions.map((pos) =>
     makePlayer(rng, team, side, pos, pos.number, true)
   );
-  const bench = fmt.id === "sevens" ? SEVENS_BENCH : UNION_BENCH;
-  bench.forEach((posIdx, i) => {
-    squad.push(
-      makePlayer(rng, team, side, positions[posIdx], positions.length + 1 + i, false)
-    );
+  const target = fmt.id === "sevens" ? size ?? 14 : size ?? squadSize(team.reputation);
+  // weighted bag of positions for the depth players
+  const weights = fmt.id === "sevens" ? positions.map(() => 1) : UNION_DEPTH_WEIGHT;
+  const bag: number[] = [];
+  positions.forEach((_, i) => {
+    for (let w = 0; w < (weights[i] ?? 2); w++) bag.push(i);
   });
+  let shirt = positions.length + 1;
+  while (squad.length < target) {
+    const posIdx = bag[Math.floor(rng.next() * bag.length)];
+    squad.push(makePlayer(rng, team, side, positions[posIdx], shirt++, false));
+  }
+  // university clubs attract 1–3 strong overseas students (key positions)
+  if (fmt.id !== "sevens" && team.university) {
+    const n = rng.int(1, 3);
+    // favour impact positions: 10, 12, 13, wings, 8, locks, openside
+    const impact = [9, 10, 11, 12, 13, 7, 4, 5];
+    for (let s = 0; s < n; s++) {
+      const posIdx = impact[Math.floor(rng.next() * impact.length)];
+      const student = makeStudent(rng, team, positions[posIdx], shirt++);
+      student.side = side;
+      squad.push(student);
+    }
+  }
+  // dressing-room cohesion tracks reputation: low-rep clubs struggle for numbers
+  // at training, so morale starts lower (which then drags reputation down again).
+  const moraleBase = Math.max(25, Math.min(90, 40 + reputation * 0.45));
+  for (const p of squad) {
+    if (p.studentYearsLeft) continue; // students arrive keen
+    p.condition.morale = Math.max(20, Math.min(95, Math.round(moraleBase + rng.range(-10, 10))));
+  }
   return squad;
 }

@@ -376,6 +376,10 @@ button.primary:hover { filter: brightness(1.08); }
 .squad-panel { max-width: 1100px; margin: 16px auto 0; }
 .squad-table td.club .full { margin-left: 0; }
 .squad-table th, .squad-table td { padding: 6px 8px; }
+.tag { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 10px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; background: rgba(255,255,255,0.08); color: var(--muted); vertical-align: middle; }
+.tag.student { background: rgba(94,191,255,0.16); color: #5ebfff; }
+.squad-table tr.is-student td.club .full:first-child { color: #5ebfff !important; }
+.rep-note { color: var(--accent); font-weight: 700; margin-left: 8px; }
 
 /* team selection */
 .select-note { max-width: 1100px; margin: 8px auto 0; padding: 0 4px; color: var(--muted); font-size: 13px; }

@@ -125,6 +125,13 @@ export class Match {
     }
     // only the starting XV/VII take the field; the bench waits for subs
     this.players = [...this.squads.home, ...this.squads.away].filter((p) => p.onField);
+    // give the on-field side clean 1..N shirts in positional order
+    for (const side of ["home", "away"] as Side[]) {
+      this.squads[side]
+        .filter((p) => p.onField)
+        .sort((a, b) => a.position.number - b.position.number)
+        .forEach((p, i) => (p.number = i + 1));
+    }
     this.ball = {
       x: HALFWAY,
       y: PITCH.width / 2,

@@ -93,9 +93,14 @@ function renderSquad() {
   squadBody.innerHTML = roster
     .map((p) => {
       const a = p.attr;
-      return `<tr>
+      const tag = p.studentYearsLeft
+        ? ` <span class="tag student">${p.nationality} · student</span>`
+        : p.nationality !== "Sweden"
+          ? ` <span class="tag">${p.nationality}</span>`
+          : "";
+      return `<tr${p.studentYearsLeft ? ' class="is-student"' : ""}>
         <td class="club">${p.position.short}</td>
-        <td class="club"><span class="full" style="color:var(--text)">${p.name}</span></td>
+        <td class="club"><span class="full" style="color:var(--text)">${p.name}</span>${tag}</td>
         <td>${p.age}</td>
         <td>${a.strength}</td><td>${a.pace}</td><td>${a.handling}</td><td>${a.tackling}</td><td>${a.kicking}</td>
         <td>${p.hidden.currentAbility}</td><td>${p.hidden.potentialAbility}</td>
@@ -117,6 +122,8 @@ function save() {
     userShort: season.userClub.short,
     seed: seasonSeed,
     round: season.round,
+    year: season.year,
+    reputation: season.reputationState(),
     tactics: userTactics,
     results: season.fixtures
       .filter((f) => f.played)
@@ -140,7 +147,7 @@ function load(): boolean {
     const user = CLUBS.find((c) => c.short === d.userShort);
     if (!user) return false;
     seasonSeed = d.seed;
-    season = new Season(divisionFor(user), user, seasonSeed);
+    season = new Season(divisionFor(user), user, seasonSeed, { reputation: d.reputation, year: d.year });
     season.round = d.round;
     userTactics = d.tactics ?? { ...PRESETS[0].tactics };
     for (const r of d.results ?? []) {
@@ -173,7 +180,7 @@ function renderClubPicker() {
     card.innerHTML = `
       <span class="badge" style="background:${club.colors.primary};border-color:${club.colors.secondary}"></span>
       <span class="club-name">${club.name}</span>
-      <span class="club-meta">${club.city} · ${club.region === "north" ? "North" : "South"} · ★ ${club.rating}</span>`;
+      <span class="club-meta">${club.city} · ${club.region === "north" ? "North" : "South"} · rep ${club.reputation}${club.university ? " · 🎓 uni" : ""}</span>`;
     card.addEventListener("click", () => startCareer(club));
     clubGrid.appendChild(card);
   }
@@ -191,7 +198,7 @@ function startCareer(club: Team) {
 function renderSeason() {
   if (!season) return;
   showView("season");
-  seasonClub.textContent = `${season.userClub.name}`;
+  seasonClub.textContent = `${season.userClub.name} · rep ${Math.round(season.repOf(season.userClub))}`;
   championBanner.classList.add("hidden");
 
   // table
@@ -210,19 +217,23 @@ function renderSeason() {
 
   if (season.isComplete()) {
     const champ = season.champion()!;
-    seasonRound.textContent = "Season complete";
+    seasonRound.textContent = `Year ${season.year} — complete`;
     championBanner.classList.remove("hidden");
-    championBanner.innerHTML = champ === season.userClub
-      ? `🏆 <strong>Champions!</strong> ${champ.name} win the league.`
-      : `Season over — <strong>${champ.name}</strong> are champions.`;
+    const myRep = Math.round(season.repOf(season.userClub));
+    championBanner.innerHTML =
+      (champ === season.userClub
+        ? `🏆 <strong>Champions!</strong> ${champ.name} win the league.`
+        : `Season over — <strong>${champ.name}</strong> are champions.`) +
+      `<span class="rep-note"> Your reputation: ${myRep}/100</span>`;
     fixturesTitle.textContent = "Final standings";
     fixturesList.innerHTML = "";
-    playRoundBtn.classList.add("hidden");
+    playRoundBtn.textContent = `Start year ${season.year + 1} ›`;
+    playRoundBtn.classList.remove("hidden");
     save();
     return;
   }
 
-  seasonRound.textContent = `Round ${season.round} of ${season.totalRounds}`;
+  seasonRound.textContent = `Year ${season.year} · Round ${season.round} of ${season.totalRounds}`;
   playRoundBtn.classList.remove("hidden");
 
   // fixtures for this round
@@ -253,6 +264,10 @@ function renderSeason() {
 
 playRoundBtn.addEventListener("click", () => {
   if (!season) return;
+  if (season.isComplete()) {
+    startNextSeason();
+    return;
+  }
   const userFx = season.userFixture(season.round);
   if (userFx) {
     renderSelect(userFx);
@@ -262,6 +277,18 @@ playRoundBtn.addEventListener("click", () => {
     renderSeason();
   }
 });
+
+function startNextSeason() {
+  if (!season) return;
+  season.endSeasonReputation();
+  const reputation = season.reputationState();
+  const year = season.year + 1;
+  const user = season.userClub;
+  seasonSeed = (seasonSeed * 1103515245 + 12345) >>> 0;
+  season = new Season(divisionFor(user), user, seasonSeed, { reputation, year });
+  save();
+  renderSeason();
+}
 
 // ====================== team selection ===================================
 let pendingFixture: Fixture | null = null;
@@ -276,7 +303,7 @@ function renderSelect(fixture: Fixture) {
   pendingFixture = fixture;
   const roster = season.rosterFor(season.userClub);
   availSeed = (seasonSeed * 1000 + season.round) >>> 0;
-  availability = rollAvailability(roster, availSeed);
+  availability = rollAvailability(roster, availSeed, season.repOf(season.userClub));
   const availableIds = new Set(availability.filter((a) => a.available).map((a) => a.player.id));
   const starters = autoSelect(roster, availableIds);
 
@@ -360,7 +387,7 @@ function startUserMatch(fixture: Fixture) {
   // the AI opponent also has availability and fields its best available XV
   const aiClub = userIsHome ? away : home;
   const aiRoster = season!.rosterFor(aiClub);
-  const aiAvail = rollAvailability(aiRoster, (availSeed * 7 + 3) >>> 0);
+  const aiAvail = rollAvailability(aiRoster, (availSeed * 7 + 3) >>> 0, season!.repOf(aiClub));
   autoSelect(aiRoster, new Set(aiAvail.filter((a) => a.available).map((a) => a.player.id)));
   // user's tactics go on their side; AI picks a preset
   const aiTactics = PRESETS[(seasonSeed + fixture.round) % PRESETS.length].tactics;

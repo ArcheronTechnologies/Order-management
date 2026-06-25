@@ -7,20 +7,20 @@ import type { Team } from "../engine/teams";
  */
 export const CLUBS: Team[] = [
   // --- North ---
-  { name: "Stockholm Exiles RFC", short: "EXI", city: "Stockholm", tier: "allsvenskan", region: "north", rating: 16, colors: { primary: "#1f7a44", secondary: "#ffffff" } },
-  { name: "Hammarby IF Rugby", short: "HAM", city: "Stockholm", tier: "allsvenskan", region: "north", rating: 14, colors: { primary: "#1ca64c", secondary: "#0a0a0a" } },
-  { name: "Uppsala RFC", short: "UPP", city: "Uppsala", tier: "allsvenskan", region: "north", rating: 13, colors: { primary: "#13315c", secondary: "#c8a24a" } },
-  { name: "Enköpings RK", short: "ENK", city: "Enköping", tier: "allsvenskan", region: "north", rating: 12, colors: { primary: "#1565c0", secondary: "#ffd233" } },
-  { name: "Erikslunds KF", short: "ERK", city: "Täby", tier: "allsvenskan", region: "north", rating: 12, colors: { primary: "#b22222", secondary: "#0a0a0a" } },
-  { name: "IKSU Rugby", short: "IKS", city: "Umeå", tier: "allsvenskan", region: "north", rating: 11, colors: { primary: "#ef7d00", secondary: "#0a0a0a" } },
+  { name: "Stockholm Exiles RFC", short: "EXI", city: "Stockholm", tier: "allsvenskan", region: "north", rating: 16, reputation: 82, facilities: 4, university: true, colors: { primary: "#1f7a44", secondary: "#ffffff" } },
+  { name: "Hammarby IF Rugby", short: "HAM", city: "Stockholm", tier: "allsvenskan", region: "north", rating: 14, reputation: 72, facilities: 4, university: true, colors: { primary: "#1ca64c", secondary: "#0a0a0a" } },
+  { name: "Uppsala RFC", short: "UPP", city: "Uppsala", tier: "allsvenskan", region: "north", rating: 13, reputation: 66, facilities: 3, university: true, colors: { primary: "#13315c", secondary: "#c8a24a" } },
+  { name: "Enköpings RK", short: "ENK", city: "Enköping", tier: "allsvenskan", region: "north", rating: 12, reputation: 60, facilities: 3, colors: { primary: "#1565c0", secondary: "#ffd233" } },
+  { name: "Erikslunds KF", short: "ERK", city: "Täby", tier: "allsvenskan", region: "north", rating: 12, reputation: 58, facilities: 3, colors: { primary: "#b22222", secondary: "#0a0a0a" } },
+  { name: "IKSU Rugby", short: "IKS", city: "Umeå", tier: "allsvenskan", region: "north", rating: 11, reputation: 54, facilities: 2, university: true, colors: { primary: "#ef7d00", secondary: "#0a0a0a" } },
 
   // --- South ---
-  { name: "Göteborg RF", short: "GBG", city: "Göteborg", tier: "allsvenskan", region: "south", rating: 14, colors: { primary: "#1769aa", secondary: "#ffffff" } },
-  { name: "Lugi Rugbyklubb", short: "LUG", city: "Lund", tier: "allsvenskan", region: "south", rating: 14, colors: { primary: "#7a1f3d", secondary: "#ffffff" } },
-  { name: "Malmö RC", short: "MAL", city: "Malmö", tier: "allsvenskan", region: "south", rating: 13, colors: { primary: "#4aa3df", secondary: "#ffffff" } },
-  { name: "Pingvin RC", short: "PIN", city: "Trelleborg", tier: "allsvenskan", region: "south", rating: 12, colors: { primary: "#0a0a0a", secondary: "#ffffff" } },
-  { name: "Vänersborgs RK", short: "VAN", city: "Vänersborg", tier: "allsvenskan", region: "south", rating: 12, colors: { primary: "#2e7d32", secondary: "#ffffff" } },
-  { name: "Spartacus RC", short: "SPA", city: "Partille", tier: "allsvenskan", region: "south", rating: 11, colors: { primary: "#c62828", secondary: "#0a0a0a" } },
+  { name: "Göteborg RF", short: "GBG", city: "Göteborg", tier: "allsvenskan", region: "south", rating: 14, reputation: 73, facilities: 4, university: true, colors: { primary: "#1769aa", secondary: "#ffffff" } },
+  { name: "Lugi Rugbyklubb", short: "LUG", city: "Lund", tier: "allsvenskan", region: "south", rating: 14, reputation: 71, facilities: 3, university: true, colors: { primary: "#7a1f3d", secondary: "#ffffff" } },
+  { name: "Malmö RC", short: "MAL", city: "Malmö", tier: "allsvenskan", region: "south", rating: 13, reputation: 65, facilities: 3, university: true, colors: { primary: "#4aa3df", secondary: "#ffffff" } },
+  { name: "Pingvin RC", short: "PIN", city: "Trelleborg", tier: "allsvenskan", region: "south", rating: 12, reputation: 59, facilities: 2, colors: { primary: "#0a0a0a", secondary: "#ffffff" } },
+  { name: "Vänersborgs RK", short: "VAN", city: "Vänersborg", tier: "allsvenskan", region: "south", rating: 12, reputation: 57, facilities: 2, colors: { primary: "#2e7d32", secondary: "#ffffff" } },
+  { name: "Spartacus RC", short: "SPA", city: "Partille", tier: "allsvenskan", region: "south", rating: 11, reputation: 53, facilities: 2, colors: { primary: "#c62828", secondary: "#0a0a0a" } },
 ];
 
 export function clubByShort(short: string): Team | undefined {

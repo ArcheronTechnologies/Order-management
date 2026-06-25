@@ -1,7 +1,16 @@
-import { buildSquad, type Team } from "./teams";
+import { buildSquad, squadSize, type Team } from "./teams";
 import { FORMATS } from "./formats";
 import { Rng } from "./rng";
 import type { Player } from "./types";
+
+function clampRep(v: number) {
+  return Math.max(15, Math.min(100, v));
+}
+
+export interface SeasonState {
+  reputation?: Record<string, number>; // by club short
+  year?: number;
+}
 
 export interface Fixture {
   round: number;
@@ -81,20 +90,66 @@ export class Season {
   readonly totalRounds: number;
   /** persistent squad per club, generated once (deterministic from the seed). */
   readonly rosters = new Map<Team, Player[]>();
+  /** live reputation per club — evolves year on year. */
+  readonly reputation = new Map<Team, number>();
+  readonly seed: number;
+  year = 1;
   round = 1; // next round to play
 
-  constructor(clubs: Team[], userClub: Team, seed: number) {
+  constructor(clubs: Team[], userClub: Team, seed: number, state: SeasonState = {}) {
     this.clubs = clubs;
     this.userClub = userClub;
+    this.seed = seed;
+    this.year = state.year ?? 1;
     this.fixtures = buildFixtures(clubs, new Rng(seed));
     this.totalRounds = Math.max(...this.fixtures.map((f) => f.round));
     clubs.forEach((c, i) => {
-      this.rosters.set(c, buildSquad(new Rng((seed * 1000 + i * 97 + 13) >>> 0), c, "home", FORMATS.union));
+      const rep = state.reputation?.[c.short] ?? c.reputation;
+      this.reputation.set(c, rep);
+      this.rosters.set(
+        c,
+        buildSquad(new Rng((seed * 1000 + i * 97 + 13) >>> 0), c, "home", FORMATS.union, squadSize(rep), rep)
+      );
     });
   }
 
   rosterFor(team: Team): Player[] {
     return this.rosters.get(team)!;
+  }
+
+  repOf(team: Team): number {
+    return this.reputation.get(team) ?? team.reputation;
+  }
+
+  private avgMorale(team: Team): number {
+    const r = this.rosterFor(team);
+    return r.reduce((s, p) => s + p.condition.morale, 0) / Math.max(1, r.length);
+  }
+
+  /**
+   * End-of-season reputation move: results vs expectation, a steady pull toward
+   * what the club's facilities can sustain, and dressing-room togetherness.
+   */
+  endSeasonReputation(): void {
+    const table = this.table();
+    const n = this.clubs.length;
+    const byRep = [...this.clubs].sort((a, b) => this.repOf(b) - this.repOf(a));
+    table.forEach((row, idx) => {
+      const club = row.team;
+      const pos = idx + 1; // 1 = champion
+      const expected = byRep.indexOf(club) + 1;
+      const overperform = expected - pos; // +ve = better than expected
+      const result = overperform * 1.6 + (pos === 1 ? 4 : 0) + (pos === n ? -3 : 0);
+      const facilitiesPull = (club.facilities * 17 - this.repOf(club)) * 0.06;
+      const togetherness = (this.avgMorale(club) - 60) * 0.05;
+      this.reputation.set(club, clampRep(this.repOf(club) + result + facilitiesPull + togetherness));
+    });
+  }
+
+  reputationState(): Record<string, number> {
+    const out: Record<string, number> = {};
+    for (const [team, rep] of this.reputation) out[team.short] = Math.round(rep);
+    return out;
   }
 
   roundFixtures(r: number): Fixture[] {

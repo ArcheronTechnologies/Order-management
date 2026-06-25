@@ -17,16 +17,19 @@ function clamp(v: number, lo: number, hi: number) {
  * work, family, or just didn't show. Low commitment / inflexible jobs miss more.
  * Deterministic per (seed, player) so a round is stable across reloads.
  */
-export function rollAvailability(squad: Player[], seed: number): Availability[] {
+export function rollAvailability(squad: Player[], seed: number, reputation = 60): Availability[] {
+  // low-reputation clubs struggle for numbers — players drift away from training
+  // and matches, so everyone is a bit more likely to be a no-show
+  const repPenalty = clamp((62 - reputation) / 260, 0, 0.18);
   return squad.map((p) => {
     if (p.condition.injuredWeeks > 0) {
       return { player: p, available: false, reason: `Injured (${p.condition.injuredWeeks}w)` };
     }
     const rng = new Rng((seed * 31 + p.id * 7 + 1) >>> 0);
     const miss = clamp(
-      0.015 + (20 - p.person.commitment) * 0.007 + (20 - p.person.workFlexibility) * 0.005,
+      0.015 + (20 - p.person.commitment) * 0.007 + (20 - p.person.workFlexibility) * 0.005 + repPenalty,
       0.01,
-      0.32
+      0.4
     );
     if (rng.chance(miss)) {
       const r = rng.next();
