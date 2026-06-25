@@ -117,8 +117,12 @@ refactor everything else needs).
     between club cities — Umeå's away trips cost ~3× a Stockholm club's). A
     Finances screen shows the breakdown, a season-end projection, and **committee
     mood** (from balance + league position) (`finances.ts`, `data/geo.ts`).
-    *Still to do:* facility-upgrade spending, committee objectives/job security,
-    sponsors/fundraising depth.
+  - *Done (facilities):* spend the bank balance to **upgrade facilities** (level
+    1→5) from the Finances screen. Higher facilities raise the reputation ceiling
+    the club is pulled toward each year (the money→facilities→prestige→squad loop)
+    but also cost more in annual upkeep. Per-club facilities level persists for
+    all clubs (`facState`, `Season.facilities`). *Still to do:* committee
+    objectives/job security, sponsors/fundraising depth.
 - **M12 — Youth & academy.** Annual intake (newgens), minis/juniors, schools links,
   U18/U20, development centres, feeder/affiliate clubs.
 - **M13 — Competitions & game world.** Full Swedish pyramid + promotion/relegation,

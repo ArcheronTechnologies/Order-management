@@ -9,7 +9,7 @@ import { Rng } from "./engine/rng";
 import type { Team } from "./engine/teams";
 import { UNION_POSITIONS, setRole, serializePlayer, deserializePlayer, buildSquad } from "./engine/teams";
 import { SevensCup, sevensLineup, cupEntrants, ROUND_NAMES, type SevensTie } from "./engine/sevens";
-import { computeFinances, committeeMood, formatKr, type FinanceBreakdown } from "./engine/finances";
+import { computeFinances, committeeMood, formatKr, facilityUpgradeCost, type FinanceBreakdown } from "./engine/finances";
 import { developSquad, type SeasonDevelopment } from "./engine/development";
 import {
   applyTraining,
@@ -112,15 +112,21 @@ let balance = 0; // the club bank balance (kr), carried across years
 // evolving year on year (promotion/relegation move clubs between tiers).
 let tiers: Record<string, "allsvenskan" | "div1"> = {};
 let repState: Record<string, number> = {};
+let facState: Record<string, number> = {}; // current facilities level per club (upgradeable)
 function currentTier(club: Team): "allsvenskan" | "div1" {
   return tiers[club.short] ?? club.tier;
+}
+function currentFacilities(club: Team): number {
+  return facState[club.short] ?? club.facilities;
 }
 function resetWorld() {
   tiers = {};
   repState = {};
+  facState = {};
   for (const c of CLUBS) {
     tiers[c.short] = c.tier;
     repState[c.short] = c.reputation;
+    facState[c.short] = c.facilities;
   }
 }
 function divisionLabel(club: Team): string {
@@ -136,7 +142,7 @@ function currentSeasonFinances(): FinanceBreakdown | null {
   const userFixtures = season.fixtures.filter((f) => f.home === user || f.away === user);
   const homeMatches = userFixtures.filter((f) => f.home === user).length;
   const awayOpponents = userFixtures.filter((f) => f.away === user).map((f) => f.home);
-  return computeFinances(user, season.repOf(user), currentTier(user), homeMatches, awayOpponents);
+  return computeFinances(user, season.repOf(user), currentTier(user), homeMatches, awayOpponents, currentFacilities(user));
 }
 
 function renderFinances() {
@@ -147,6 +153,19 @@ function renderFinances() {
   const pos = season.table().findIndex((r) => r.team === season!.userClub) + 1;
   const mood = committeeMood(balance, pos || season.clubs.length, season.clubs.length);
   $("finCommittee").innerHTML = `Committee: <strong>${mood.label}</strong> (${mood.score}/100)`;
+  // facilities + upgrade
+  const fac = currentFacilities(season.userClub);
+  const facEl = $("finFacilities");
+  const upBtn = $("finUpgrade") as HTMLButtonElement;
+  facEl.innerHTML = `Facilities: <strong>${"★".repeat(fac)}${"☆".repeat(5 - fac)}</strong> (level ${fac}/5)`;
+  if (fac >= 5) {
+    upBtn.classList.add("hidden");
+  } else {
+    const cost = facilityUpgradeCost(fac);
+    upBtn.classList.remove("hidden");
+    upBtn.textContent = `Upgrade → level ${fac + 1} (${formatKr(cost)})`;
+    upBtn.disabled = balance < cost;
+  }
   const row = (label: string, v: number) => `<li><span>${label}</span><span>${formatKr(v)}</span></li>`;
   $("finIncome").innerHTML =
     row("Membership fees", fin.income.membership) +
@@ -165,6 +184,18 @@ function renderFinances() {
 }
 $("financesBtn").addEventListener("click", renderFinances);
 $("financesBack").addEventListener("click", () => renderSeason());
+$("finUpgrade").addEventListener("click", () => {
+  if (!season) return;
+  const club = season.userClub;
+  const fac = currentFacilities(club);
+  const cost = facilityUpgradeCost(fac);
+  if (fac >= 5 || balance < cost) return;
+  balance -= cost;
+  facState[club.short] = fac + 1;
+  season.facilities.set(club, fac + 1); // so this season's reputation pull uses it
+  save();
+  renderFinances();
+});
 
 const tacticsPanel = createTacticsPanel((t) => {
   userTactics = t;
@@ -406,6 +437,7 @@ function save() {
     year: season.year,
     reputation: repState, // all 24 clubs
     tiers,
+    facilities: facState,
     gfResolved,
     nationalChamp: nationalChamp?.short,
     balance,
@@ -433,11 +465,12 @@ function load(): boolean {
     resetWorld();
     if (d.tiers) Object.assign(tiers, d.tiers);
     if (d.reputation) Object.assign(repState, d.reputation);
+    if (d.facilities) Object.assign(facState, d.facilities);
     // carry the saved persistent squad so years of development survive a reload
     const carry = Array.isArray(d.roster)
       ? new Map<Team, Player[]>([[user, d.roster.map(deserializePlayer)]])
       : undefined;
-    season = new Season(divisionFor(user), user, seasonSeed, { reputation: repState, year: d.year }, carry);
+    season = new Season(divisionFor(user), user, seasonSeed, { reputation: repState, facilities: facState, year: d.year }, carry);
     season.round = d.round;
     gfResolved = !!d.gfResolved;
     nationalChamp = d.nationalChamp ? CLUBS.find((c) => c.short === d.nationalChamp) ?? null : null;
@@ -501,7 +534,7 @@ function startCareer(club: Team) {
   resetWorld();
   // a modest float to start: semi-pro top tier carries more cash than the amateurs
   balance = currentTier(club) === "allsvenskan" ? 90000 : 45000;
-  season = new Season(divisionFor(club), club, seasonSeed, { reputation: repState });
+  season = new Season(divisionFor(club), club, seasonSeed, { reputation: repState, facilities: facState });
   userTactics = { ...PRESETS[0].tactics };
   trainingPlan = { ...DEFAULT_TRAINING };
   lastTraining = null;
@@ -836,7 +869,7 @@ function finalizeRollover() {
   lastDev = developSquad(season.rosterFor(user), devRng, user, repState[user.short] ?? user.reputation);
   const carry = new Map<Team, Player[]>([[user, lastDev.roster]]);
   seasonSeed = (seasonSeed * 1103515245 + 12345) >>> 0;
-  season = new Season(divisionFor(user), user, seasonSeed, { reputation: repState, year }, carry);
+  season = new Season(divisionFor(user), user, seasonSeed, { reputation: repState, facilities: facState, year }, carry);
   lastSnubs = [];
   lastMom = null;
   lastRatings = [];

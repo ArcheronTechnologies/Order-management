@@ -9,6 +9,7 @@ function clampRep(v: number) {
 
 export interface SeasonState {
   reputation?: Record<string, number>; // by club short
+  facilities?: Record<string, number>; // by club short (upgrades override the default)
   year?: number;
 }
 
@@ -92,6 +93,8 @@ export class Season {
   readonly rosters = new Map<Team, Player[]>();
   /** live reputation per club — evolves year on year. */
   readonly reputation = new Map<Team, number>();
+  /** current facilities level per club (upgrades override the club default). */
+  readonly facilities = new Map<Team, number>();
   readonly seed: number;
   year = 1;
   round = 1; // next round to play
@@ -112,6 +115,7 @@ export class Season {
     clubs.forEach((c, i) => {
       const rep = state.reputation?.[c.short] ?? c.reputation;
       this.reputation.set(c, rep);
+      this.facilities.set(c, state.facilities?.[c.short] ?? c.facilities);
       // a carried-over roster (persistent players across years) takes precedence;
       // otherwise generate a fresh reputation-scaled squad from the seed
       const carried = carry?.get(c);
@@ -129,6 +133,16 @@ export class Season {
 
   repOf(team: Team): number {
     return this.reputation.get(team) ?? team.reputation;
+  }
+
+  facOf(team: Team): number {
+    return this.facilities.get(team) ?? team.facilities;
+  }
+
+  facilitiesState(): Record<string, number> {
+    const out: Record<string, number> = {};
+    for (const [team, f] of this.facilities) out[team.short] = f;
+    return out;
   }
 
   private avgMorale(team: Team): number {
@@ -150,7 +164,7 @@ export class Season {
       const expected = byRep.indexOf(club) + 1;
       const overperform = expected - pos; // +ve = better than expected
       const result = overperform * 1.6 + (pos === 1 ? 4 : 0) + (pos === n ? -3 : 0);
-      const facilitiesPull = (club.facilities * 17 - this.repOf(club)) * 0.06;
+      const facilitiesPull = (this.facOf(club) * 17 - this.repOf(club)) * 0.06;
       const togetherness = (this.avgMorale(club) - 60) * 0.05;
       this.reputation.set(club, clampRep(this.repOf(club) + result + facilitiesPull + togetherness));
     });

@@ -430,7 +430,10 @@ button.primary:hover { filter: brightness(1.08); }
 .fin-balance { font-size: 20px; margin-bottom: 4px; }
 .fin-balance .pos, .fin-note .pos { color: #4ad07a; }
 .fin-balance .neg, .fin-note .neg { color: #ff6b6b; }
-.fin-committee { color: var(--muted); margin-bottom: 16px; }
+.fin-committee { color: var(--muted); margin-bottom: 10px; }
+.fin-facilities { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+.fin-facilities strong { color: #ffd166; letter-spacing: 2px; }
+.fin-facilities button[disabled] { opacity: 0.45; cursor: not-allowed; }
 .fin-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .fin-col { background: var(--panel, #11201a); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
 .fin-col h3 { margin: 0 0 8px; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.3px; }

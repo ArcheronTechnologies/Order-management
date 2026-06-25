@@ -36,12 +36,13 @@ export function computeFinances(
   reputation: number,
   tier: "allsvenskan" | "div1",
   homeMatches: number,
-  awayOpponents: Team[]
+  awayOpponents: Team[],
+  facilities: number
 ): FinanceBreakdown {
   const membership = squadSize(reputation) * MEMBER_FEE;
   const sponsorship = Math.round(reputation * tierMultiplier(tier) * SPONSOR_PER_REP);
   const matchday = Math.round(homeMatches * reputation * GATE_PER_REP);
-  const upkeep = club.facilities * UPKEEP_PER_FACILITY;
+  const upkeep = facilities * UPKEEP_PER_FACILITY;
   const kit = KIT_INSURANCE;
   const travel = awayOpponents.reduce(
     (s, opp) => s + Math.round(distanceKm(club.city, opp.city) * TRAVEL_PER_KM),
@@ -70,6 +71,11 @@ export function committeeMood(balance: number, finishPos: number, divisionSize: 
     score >= 40 ? "Content" :
     score >= 22 ? "Concerned" : "Restless";
   return { score, label };
+}
+
+/** Cost to upgrade facilities from `level` to `level + 1` (steeper near the top). */
+export function facilityUpgradeCost(level: number): number {
+  return level * 70000;
 }
 
 export function formatKr(n: number): string {
