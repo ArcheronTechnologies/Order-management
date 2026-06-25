@@ -214,6 +214,13 @@ refactor everything else needs).
     persisted. *Still to do:* job offers/interviews, coaching badges, journeyman.
 - **M15 — Media & reputation.** Local press conferences, interviews, social feed,
   news/rumours, reputation.
+  - *Done (press conferences):* a quick **pre-match presser** before each league
+    match — a context-aware question (favourite vs underdog) answered with a tone
+    (Confident / Measured / Defiant / Humble, or No comment). The fit of the
+    answer nudges squad morale, board approval and reputation (e.g. defiance lifts
+    underdogs but reads as arrogance when you're favourites); the outcome is filed
+    in the inbox (`media.ts`). *Still to do:* post-match interviews, rumours, a
+    social feed.
 - **M16 — Interface, tools & meta.** Portal/hub + bookmarks, search + a
   "RugbyPedia" glossary, inbox/news, data hub + comparison tools, calendar;
   modding / custom DB; holiday / instant-result.

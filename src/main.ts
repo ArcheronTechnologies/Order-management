@@ -14,6 +14,7 @@ import { pitchCondition, attendance as crowdAttendance, type MatchEnvironment, t
 import { generateOffers, settleSponsors, type SponsorOffer } from "./engine/sponsors";
 import { generateRecruitPool, signingFee, type Recruit } from "./engine/recruitment";
 import { generateYouthIntake, type Prospect } from "./engine/youth";
+import { pressQuestion, pressOutcome, PRESS_TONES, type PressTone } from "./engine/media";
 import {
   generateBoard, boardConfidence, moodLabel, holdVote, lobby, moveAgainst, updateBoard,
   type BoardMember, type CapitalProposal,
@@ -788,6 +789,45 @@ function showTeamTalk(phase: TalkPhase): Promise<void> {
       talkOverlay.classList.add("hidden");
       resolve();
     };
+  });
+}
+
+// ====================== pre-match press conference =======================
+const pressOverlay = $("pressOverlay");
+const pressTonesEl = $("pressTones");
+/** A quick pre-match presser; the tone nudges morale, the board and reputation. */
+function showPressConference(opp: Team): Promise<void> {
+  return new Promise((resolve) => {
+    if (!season) return resolve();
+    const favourite = season.repOf(season.userClub) >= season.repOf(opp);
+    $("pressContext").textContent = favourite ? "You're the favourites" : "Underdogs";
+    $("pressQuestion").textContent = pressQuestion(favourite, new Rng((seasonSeed * 51 + season.round * 7) >>> 0));
+    pressTonesEl.innerHTML = "";
+    const finish = (tone: PressTone | null) => {
+      if (tone) {
+        const o = pressOutcome(tone, favourite);
+        for (const p of season!.rosterFor(season!.userClub)) p.condition.morale = Math.max(0, Math.min(100, p.condition.morale + o.morale));
+        for (const m of board) m.approval = Math.max(0, Math.min(100, m.approval + o.board));
+        repState[season!.userClub.short] = Math.max(15, Math.min(100, (repState[season!.userClub.short] ?? season!.userClub.reputation) + o.rep));
+        season!.reputation.set(season!.userClub, repState[season!.userClub.short]);
+        logNews(`🎤 Presser: ${o.line}`);
+      }
+      pressOverlay.classList.add("hidden");
+      resolve();
+    };
+    for (const t of PRESS_TONES) {
+      const btn = document.createElement("button");
+      btn.className = "talk-tone";
+      btn.innerHTML = `<span class="tone-label">${t.label}</span>`;
+      btn.addEventListener("click", () => finish(t.tone));
+      pressTonesEl.appendChild(btn);
+    }
+    const skip = document.createElement("button");
+    skip.className = "talk-tone";
+    skip.innerHTML = `<span class="tone-label">No comment</span><span class="tone-blurb">Say nothing of note.</span>`;
+    skip.addEventListener("click", () => finish(null));
+    pressTonesEl.appendChild(skip);
+    pressOverlay.classList.remove("hidden");
   });
 }
 
@@ -1701,8 +1741,10 @@ function startUserMatch(fixture: Fixture) {
   syncScoreboard();
   renderer.resize();
   renderer.draw(match, currentEnv);
-  // a pre-match team talk sets the tone before kickoff
-  showTeamTalk("pre").then(() => setPlaying(true));
+  // pre-match: face the press, then the team talk, then kick off
+  showPressConference(aiClub)
+    .then(() => showTeamTalk("pre"))
+    .then(() => setPlaying(true));
 }
 
 function finishUserMatch() {
