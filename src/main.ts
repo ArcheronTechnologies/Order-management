@@ -714,6 +714,49 @@ function syncScoreboard() {
   awayScoreEl.textContent = String(match.score.away);
   clockEl.textContent = fmtClock(match.clock);
   halfEl.textContent = match.finished ? "Full time" : match.half === 1 ? "1st half" : "2nd half";
+  renderStats();
+}
+
+const statsPanel = $("statsPanel");
+/** A split bar (percentage) row: home value | bar | away value. */
+function pctRow(label: string, h: number, a: number): string {
+  const tot = h + a;
+  const hp = tot > 0 ? Math.round((h / tot) * 100) : 50;
+  return `<div class="stat-row">
+    <span class="sv">${hp}%</span>
+    <span class="stat-label">${label}<span class="stat-bar"><span class="fill" style="width:${hp}%"></span></span></span>
+    <span class="sv right">${100 - hp}%</span>
+  </div>`;
+}
+/** A plain count row: home value | label | away value. */
+function numRow(label: string, h: string | number, a: string | number): string {
+  return `<div class="stat-row">
+    <span class="sv">${h}</span><span class="stat-label center">${label}</span><span class="sv right">${a}</span>
+  </div>`;
+}
+function setPiecePct(won: number, lost: number): string {
+  const t = won + lost;
+  return t ? `${Math.round((won / t) * 100)}% (${won}/${t})` : "—";
+}
+function tacklePct(made: number, missed: number): string {
+  const t = made + missed;
+  return t ? `${Math.round((made / t) * 100)}%` : "—";
+}
+function renderStats() {
+  if (!match) return;
+  const h = match.stats.home;
+  const a = match.stats.away;
+  statsPanel.innerHTML =
+    pctRow("Possession", h.possSecs, a.possSecs) +
+    pctRow("Territory", h.terrSecs, a.terrSecs) +
+    numRow("Tries", h.tries, a.tries) +
+    numRow("Line breaks", h.lineBreaks, a.lineBreaks) +
+    numRow("Tackle success", tacklePct(h.tackles, h.missedTackles), tacklePct(a.tackles, a.missedTackles)) +
+    numRow("Kicks from hand", h.kicks, a.kicks) +
+    numRow("Turnovers won", h.turnoversWon, a.turnoversWon) +
+    numRow("Penalties conceded", h.penalties, a.penalties) +
+    numRow("Scrums", setPiecePct(h.scrumWon, h.scrumLost), setPiecePct(a.scrumWon, a.scrumLost)) +
+    numRow("Lineouts", setPiecePct(h.lineoutWon, h.lineoutLost), setPiecePct(a.lineoutWon, a.lineoutLost));
 }
 function flushCommentary() {
   if (!match) return;

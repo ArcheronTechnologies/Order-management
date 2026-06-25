@@ -90,6 +90,12 @@ refactor everything else needs).
 - **M9 — Match-day presentation & in-match management.** Follow-ball camera/zoom;
   highlights/commentary/full view modes; broadcast overlays; live stats
   (possession, territory, an xPoints analogue); substitutions UI.
+  - *Done (stats):* a **live broadcast stats panel** in the match view —
+    possession & territory split bars, tries, line breaks, tackle success,
+    kicks from hand, turnovers won, penalties conceded, and scrum/lineout
+    retention %. Per-side stats accumulated in the engine (`Match.stats` /
+    `SideStats`), updating every frame. *Still to do:* follow-ball camera/zoom,
+    view modes, substitutions UI.
 - **M10 — Recruitment, retention & staff.** Local catchment, uni links, walk-ups,
   trials; scouting reports/shortlists; retention vs life-pull; volunteer staff.
 - **M11 — Club operations, finances & committee.** Costs vs income; semi-pro

@@ -49,6 +49,30 @@ function clamp(v: number, lo: number, hi: number): number {
   return v < lo ? lo : v > hi ? hi : v;
 }
 
+/** Live, per-side broadcast stats accumulated through the match. */
+export interface SideStats {
+  possSecs: number; // time in possession
+  terrSecs: number; // time with the ball in the opponent's half
+  tackles: number;
+  missedTackles: number;
+  lineBreaks: number;
+  kicks: number;
+  penalties: number; // conceded
+  turnoversWon: number;
+  scrumWon: number;
+  scrumLost: number;
+  lineoutWon: number;
+  lineoutLost: number;
+  tries: number;
+}
+function newStats(): SideStats {
+  return {
+    possSecs: 0, terrSecs: 0, tackles: 0, missedTackles: 0, lineBreaks: 0,
+    kicks: 0, penalties: 0, turnoversWon: 0, scrumWon: 0, scrumLost: 0,
+    lineoutWon: 0, lineoutLost: 0, tries: 0,
+  };
+}
+
 export class Match {
   readonly rng: Rng;
   readonly fmt: FormatConfig;
@@ -70,6 +94,8 @@ export class Match {
   finished = false;
   /** transient team-talk lift/slump per side (-0.06..+0.06), set by deliverTalk. */
   talkBoost: Record<Side, number> = { home: 0, away: 0 };
+  /** live match stats per side, for the broadcast panel. */
+  stats: Record<Side, SideStats> = { home: newStats(), away: newStats() };
   /** counters for tuning/debug (not shown in the UI). */
   debug = { rucks: 0, breaks: 0, gateContacts: 0, cleanBreaks: 0, endpoint: 0, kicks: 0, turnovers: 0, phases: 0, tryRun: 0, tryDive: 0, tryPush: 0, tryMaul: 0 };
 
@@ -318,6 +344,16 @@ export class Match {
     // the lift from a team talk fades as the half wears on (roughly halves)
     this.talkBoost.home *= 1 - dt * 0.0003;
     this.talkBoost.away *= 1 - dt * 0.0003;
+
+    // accumulate possession & territory while the ball is live
+    if (this.phase === "open" || this.phase === "ruck" || this.phase === "flight") {
+      this.stats[this.possession].possSecs += dt;
+    }
+    if (this.phase !== "fulltime") {
+      const dh = Math.abs(attackingLine("home") - this.ball.x);
+      const da = Math.abs(attackingLine("away") - this.ball.x);
+      this.stats[dh < da ? "home" : "away"].terrSecs += dt;
+    }
 
     switch (this.phase) {
       case "flight":
@@ -724,6 +760,7 @@ export class Match {
         return;
       }
       this.debug.cleanBreaks++;
+      this.stats[this.possession].lineBreaks++;
       // nobody home in that channel — clean line break! the carrier gets a pace
       // burst into space, so a quick player can outrun the cover for a try while
       // a forward gets hauled down (a big gain). Beat the nearest two markers.
@@ -824,6 +861,7 @@ export class Match {
       this.launchBall(tx, ty, KICK_SPEED, true, carrier);
       this.phase = "flight";
       this.debug.kicks++;
+      this.stats[carrier.side].kicks++;
       this.say(`${carrier.name} kicks for territory.`);
       return;
     }
@@ -924,6 +962,7 @@ export class Match {
     );
     if (this.rng.chance(breakP)) {
       this.debug.breaks++;
+      this.stats[tackler.side].missedTackles++;
       const dir = attackDir(carrier.side);
       // beating a blitz springs you into the space behind the rushed-up line
       if (sys === "blitz" && distToLine > 6) {
@@ -949,6 +988,7 @@ export class Match {
     }
     // tackle complete -> ruck. High tempo recycles quicker.
     this.debug.rucks++;
+    this.stats[tackler.side].tackles++;
     this.phase = "ruck";
     const tempoFactor = lerpSlider(this.tactics[carrier.side].tempo, 1.35, 0.6);
     this.phaseTimer = this.rng.range(1.4, 3.0) * tempoFactor;
@@ -1017,6 +1057,7 @@ export class Match {
       const offender = this.rng.next() < (defLoose * 1.4) / (defLoose * 1.4 + attLoose) ? def : att;
       const winner = this.opp(offender);
       this.possession = winner;
+      this.stats[offender].penalties++;
       this.say(`Penalty to ${this.teamOf(winner).short}.`);
       this.takePenalty(winner);
       return;
@@ -1054,6 +1095,7 @@ export class Match {
   private turnover(x: number, y: number) {
     this.debug.turnovers++;
     this.possession = this.opp(this.possession);
+    this.stats[this.possession].turnoversWon++;
     this.phaseCount = 0;
     this.say(`Turnover — ${this.teamOf(this.possession).short} have it.`);
     this.enterOpen(this.nearestOf(this.possession, x, y), true);
@@ -1154,6 +1196,8 @@ export class Match {
       winner = def;
       this.say(`Against the head! ${this.teamOf(def).short} win the scrum.`);
     }
+    if (winner === putIn) this.stats[putIn].scrumWon++;
+    else this.stats[putIn].scrumLost++;
     // a dominant put-in pack right on the line can shove over for a try
     const line = attackingLine(putIn);
     if (winner === putIn && Math.abs(line - sp.x) < 6 && edge > 8 && this.rng.chance(0.35)) {
@@ -1186,6 +1230,8 @@ export class Match {
       winner = def;
       this.say(`Stolen! ${this.teamOf(def).short} pinch the lineout.`);
     }
+    if (winner === throwIn) this.stats[throwIn].lineoutWon++;
+    else this.stats[throwIn].lineoutLost++;
     this.setPiece = null;
     if (winner !== throwIn) {
       this.enterOpen(this.nearestOf(winner, sp.x, sp.y), true);
@@ -1223,6 +1269,7 @@ export class Match {
   private scoreTry(scorer: Player) {
     const side = scorer.side;
     this.score[side] += 5;
+    this.stats[side].tries++;
     const ev: ScoreEvent = {
       clock: this.clock,
       side,
