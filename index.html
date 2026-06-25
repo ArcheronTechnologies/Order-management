@@ -67,8 +67,12 @@
       <div class="career-inner">
         <h1>Fly-Half <span class="sub">rugby manager</span></h1>
         <h2>Start your career</h2>
-        <p class="muted">Take charge of a club in the Swedish Allsvenskan. You'll play a
-          full season against the other sides in your region — pick your club.</p>
+        <p class="muted">Take charge of a club in the Swedish rugby pyramid. You'll play a
+          full season against the other sides in your division — pick your club.</p>
+        <div class="manager-name-row">
+          <label for="managerNameInput">Manager name</label>
+          <input id="managerNameInput" type="text" maxlength="28" placeholder="Your name" />
+        </div>
         <div id="clubGrid" class="club-grid"></div>
       </div>
     </div>
@@ -79,6 +83,7 @@
         <div class="controls">
           <span id="seasonRound" class="round-pill"></span>
           <button id="squadBtn">Squad</button>
+          <button id="managerBtn">Manager</button>
           <button id="newsBtn">Inbox</button>
           <button id="recruitBtn">Recruit</button>
           <button id="financesBtn">Finances</button>
@@ -134,6 +139,26 @@
           <h2 class="unavail-h">Unavailable</h2>
           <ul id="unavailList" class="avail-list out"></ul>
         </section>
+      </div>
+    </div>
+
+    <div id="managerView" class="view hidden">
+      <header class="topbar">
+        <h1>Fly-Half <span class="sub">manager profile</span></h1>
+        <div class="controls">
+          <button id="managerBack">‹ Season</button>
+        </div>
+      </header>
+      <div class="manager-panel">
+        <div id="managerHead" class="manager-head"></div>
+        <div id="managerStats" class="manager-stats"></div>
+        <h2>Career history</h2>
+        <table class="ladder">
+          <thead>
+            <tr><th>Yr</th><th>Club</th><th>Division</th><th>Pos</th><th>W</th><th>D</th><th>L</th><th>Honours</th></tr>
+          </thead>
+          <tbody id="managerHistory"></tbody>
+        </table>
       </div>
     </div>
 

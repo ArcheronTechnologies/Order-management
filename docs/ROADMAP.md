@@ -177,6 +177,10 @@ refactor everything else needs).
     *Still to do:* Nordic Cup, other nations, women's rugby.
 - **M14 — Manager & career meta.** Manager creator, backstory, coaching badges,
   job offers/interviews, journeyman, career history.
+  - *Done (profile & history):* name your manager at career start; a Manager
+    screen shows lifetime record (matches, win %), honours (league titles,
+    national titles, promotions) and a **season-by-season career history** table,
+    persisted. *Still to do:* job offers/interviews, coaching badges, journeyman.
 - **M15 — Media & reputation.** Local press conferences, interviews, social feed,
   news/rumours, reputation.
 - **M16 — Interface, tools & meta.** Portal/hub + bookmarks, search + a

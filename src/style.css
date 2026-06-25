@@ -425,6 +425,19 @@ button.primary:hover { filter: brightness(1.08); }
 .snub-note { max-width: 1100px; margin: 8px auto 0; padding: 8px 12px; border-radius: 8px; background: rgba(255,107,107,0.1); border: 1px solid rgba(255,107,107,0.3); color: #ffb3b3; font-size: 13px; }
 .concern-tag { color: #ff6b6b; font-size: 11px; font-weight: 700; margin-left: 6px; }
 
+/* manager profile */
+.manager-name-row { display: flex; align-items: center; gap: 10px; justify-content: center; margin: 6px 0 4px; }
+.manager-name-row label { color: var(--muted); font-size: 13px; }
+.manager-name-row input { background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 7px 10px; font-size: 14px; min-width: 200px; }
+.manager-panel { max-width: 820px; margin: 16px auto 0; padding: 0 4px; }
+.manager-head { margin-bottom: 12px; }
+.mgr-name { font-size: 22px; font-weight: 700; }
+.mgr-club { color: var(--muted); font-size: 14px; }
+.manager-stats { display: flex; gap: 18px; flex-wrap: wrap; margin-bottom: 18px; }
+.manager-stats div { background: var(--panel, #11201a); border: 1px solid var(--line); border-radius: 8px; padding: 10px 16px; text-align: center; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.3px; }
+.manager-stats div span { display: block; font-size: 22px; font-weight: 700; color: var(--text); }
+.manager-panel h2 { font-size: 15px; margin: 8px 0; }
+
 /* club inbox / news */
 .news-panel { max-width: 760px; margin: 16px auto 0; padding: 0 4px; }
 .news-list { list-style: none; margin: 0; padding: 0; }

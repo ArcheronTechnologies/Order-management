@@ -59,7 +59,8 @@ const financesView = $("financesView");
 const sponsorsView = $("sponsorsView");
 const recruitView = $("recruitView");
 const newsView = $("newsView");
-type ViewName = "career" | "season" | "match" | "squad" | "select" | "sevens" | "finances" | "sponsors" | "recruit" | "news";
+const managerView = $("managerView");
+type ViewName = "career" | "season" | "match" | "squad" | "select" | "sevens" | "finances" | "sponsors" | "recruit" | "news" | "manager";
 function showView(v: ViewName) {
   appView.classList.toggle("hidden", v !== "match");
   careerView.classList.toggle("hidden", v !== "career");
@@ -71,7 +72,18 @@ function showView(v: ViewName) {
   sponsorsView.classList.toggle("hidden", v !== "sponsors");
   recruitView.classList.toggle("hidden", v !== "recruit");
   newsView.classList.toggle("hidden", v !== "news");
+  managerView.classList.toggle("hidden", v !== "manager");
 }
+
+// ---- manager profile & career history ----
+interface SeasonRecord {
+  year: number; club: string; division: string;
+  pos: number; w: number; d: number; l: number;
+  champ: boolean; natChamp: boolean;
+}
+let managerName = "Coach";
+let careerHistory: SeasonRecord[] = [];
+let careerW = 0, careerD = 0, careerL = 0; // lifetime match record
 
 // ---- club inbox / news feed ----
 interface NewsItem { year: number; round: number; text: string; }
@@ -90,6 +102,44 @@ function renderNews() {
 }
 $("newsBtn").addEventListener("click", renderNews);
 $("newsBack").addEventListener("click", () => renderSeason());
+
+function renderManager() {
+  if (!season) return;
+  const titles = careerHistory.filter((s) => s.champ).length;
+  const natTitles = careerHistory.filter((s) => s.natChamp).length;
+  // promotions: a season whose division sits above the previous one
+  let promotions = 0;
+  for (let i = 1; i < careerHistory.length; i++) {
+    const prevTop = careerHistory[i - 1].division.startsWith("Allsvenskan");
+    const nowTop = careerHistory[i].division.startsWith("Allsvenskan");
+    if (!prevTop && nowTop) promotions++;
+  }
+  const played = careerW + careerD + careerL;
+  const winPct = played ? Math.round((careerW / played) * 100) : 0;
+  $("managerHead").innerHTML =
+    `<div class="mgr-name">${managerName}</div>` +
+    `<div class="mgr-club">${season.userClub.name} · ${divisionLabel(season.userClub)} · Year ${season.year}</div>`;
+  $("managerStats").innerHTML = [
+    `<div><span>${played}</span>matches</div>`,
+    `<div><span>${winPct}%</span>win rate</div>`,
+    `<div><span>${titles}</span>league titles</div>`,
+    `<div><span>${natTitles}</span>national titles</div>`,
+    `<div><span>${promotions}</span>promotions</div>`,
+  ].join("");
+  $("managerHistory").innerHTML = careerHistory.length
+    ? [...careerHistory]
+        .reverse()
+        .map((s) => {
+          const honours = [s.champ ? "🏆" : "", s.natChamp ? "🏅" : ""].filter(Boolean).join(" ");
+          return `<tr><td>${s.year}</td><td class="club">${s.club}</td><td class="club"><span class="full">${s.division}</span></td>
+            <td>${ordinal(s.pos)}</td><td>${s.w}</td><td>${s.d}</td><td>${s.l}</td><td>${honours || "—"}</td></tr>`;
+        })
+        .join("")
+    : `<tr><td colspan="8" class="club"><span class="full muted">Your first season is under way — no history yet.</span></td></tr>`;
+  showView("manager");
+}
+$("managerBtn").addEventListener("click", renderManager);
+$("managerBack").addEventListener("click", () => renderSeason());
 
 // --- match view elements -------------------------------------------------
 const canvas = $("pitch") as HTMLCanvasElement;
@@ -631,6 +681,9 @@ function save() {
     seasonStartRep,
     recruits: recruitPool.map((r) => ({ p: serializePlayer(r.player), bg: r.background, st: r.stars, pot: r.potential })),
     news: news.slice(0, 120),
+    managerName,
+    careerHistory,
+    careerRec: [careerW, careerD, careerL],
     tactics: userTactics,
     results: season.fixtures
       .filter((f) => f.played)
@@ -680,6 +733,9 @@ function load(): boolean {
       refreshRecruits();
     }
     news = Array.isArray(d.news) ? d.news : [];
+    managerName = d.managerName ?? "Coach";
+    careerHistory = Array.isArray(d.careerHistory) ? d.careerHistory : [];
+    [careerW, careerD, careerL] = Array.isArray(d.careerRec) ? d.careerRec : [0, 0, 0];
     userTactics = d.tactics ?? { ...PRESETS[0].tactics };
     trainingPlan = d.training ?? { ...DEFAULT_TRAINING };
     for (const r of d.results ?? []) {
@@ -750,9 +806,12 @@ function startCareer(club: Team) {
   nationalChamp = null;
   gfTie = null;
   news = [];
+  managerName = ($("managerNameInput") as HTMLInputElement).value.trim() || "Coach";
+  careerHistory = [];
+  careerW = careerD = careerL = 0;
   refreshSponsors();
   refreshRecruits();
-  logNews(`📅 You take charge of ${club.name} in ${divisionLabel(club)}.`);
+  logNews(`📅 ${managerName} takes charge of ${club.name} in ${divisionLabel(club)}.`);
   save();
   renderSeason();
 }
@@ -1022,6 +1081,19 @@ function startNextSeason() {
   const champ = season.table()[0]?.team;
   const finishPos = season.table().findIndex((r) => r.team === season!.userClub) + 1;
   if (champ) logNews(`🏆 ${champ.name} win ${divisionLabel(season.userClub)}; you finished ${ordinal(finishPos)}.`);
+  // file the completed season in the manager's career history
+  const myRow = season.table().find((r) => r.team === season!.userClub);
+  if (myRow) {
+    careerHistory.push({
+      year: season.year,
+      club: season.userClub.short,
+      division: divisionLabel(season.userClub),
+      pos: finishPos,
+      w: myRow.won, d: myRow.drawn, l: myRow.lost,
+      champ: finishPos === 1,
+      natChamp: gfResolved && nationalChamp === season.userClub,
+    });
+  }
   if (lastSponsorPayout) logNews(`💰 Sponsors paid out ${formatKr(lastSponsorPayout.total)} (${lastSponsorPayout.met}/${lastSponsorPayout.of} goals).`);
 
   if (userPlayoff) {
@@ -1312,6 +1384,7 @@ function finishUserMatch() {
   // game-time morale: starters lift, snubbed fringe players stew
   const won = match.score[userSide] > match.score[userSide === "home" ? "away" : "home"];
   const drew = match.score.home === match.score.away;
+  if (drew) careerD++; else if (won) careerW++; else careerL++;
   logNews(
     `${drew ? "🤝" : won ? "✅" : "❌"} ${currentFixture.home.short} ${match.score.home}–${match.score.away} ${currentFixture.away.short}` +
     (lastMom ? ` · MotM ${lastMom.player.name}` : "")
