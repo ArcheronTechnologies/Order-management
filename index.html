@@ -83,6 +83,8 @@
         <div class="controls">
           <span id="seasonRound" class="round-pill"></span>
           <button id="squadBtn">Squad</button>
+          <button id="clubBtn">Club</button>
+          <button id="boardBtn">Board</button>
           <button id="managerBtn">Manager</button>
           <button id="newsBtn">Inbox</button>
           <button id="recruitBtn">Recruit</button>
@@ -139,6 +141,38 @@
           <h2 class="unavail-h">Unavailable</h2>
           <ul id="unavailList" class="avail-list out"></ul>
         </section>
+      </div>
+    </div>
+
+    <div id="clubView" class="view hidden">
+      <header class="topbar">
+        <h1>Fly-Half <span class="sub">club operations</span></h1>
+        <div class="controls">
+          <button id="clubBack">‹ Season</button>
+        </div>
+      </header>
+      <div class="club-panel">
+        <p class="club-bal" id="clubBalance"></p>
+        <p class="select-note">Capital projects need <strong>board approval</strong> — propose, and the board votes. You set the day-to-day; the big spends are theirs to allow.</p>
+        <div id="clubAssets" class="club-assets"></div>
+        <h2>Clubhouse access</h2>
+        <p class="select-note" id="accessNote"></p>
+        <div id="accessBtns" class="btnrow"></div>
+      </div>
+    </div>
+
+    <div id="boardView" class="view hidden">
+      <header class="topbar">
+        <h1>Fly-Half <span class="sub">the board</span></h1>
+        <div class="controls">
+          <span id="boardActions" class="round-pill"></span>
+          <button id="boardBack">‹ Season</button>
+        </div>
+      </header>
+      <div class="board-panel">
+        <p class="club-bal" id="boardConfidence"></p>
+        <p class="select-note">Members judge you against their own priorities. You can't cast their votes — but a quiet word (lobby) warms them, and you can move against a hostile member to have the board oust them (risky).</p>
+        <div id="boardMembers" class="board-members"></div>
       </div>
     </div>
 

@@ -138,6 +138,18 @@ refactor everything else needs).
     the club is pulled toward each year (the money→facilities→prestige→squad loop)
     but also cost more in annual upkeep. Per-club facilities level persists for
     all clubs (`facState`, `Season.facilities`).
+  - *Done (club operations & a board with politics):* the club is yours to run.
+    **Capital projects** — buy your **match field** (own the ground → better pitch,
+    no rent), buy the **training ground** (sharper sessions), and **build the
+    clubhouse** (Portacabin → Clubhouse → Pavilion) — are proposed to a **board**
+    that **votes** on them (you can't cast their votes). Five board members each
+    have a **priority** (Ambition / Prudence / Facilities / Youth / Community) and
+    an opinion of you that shifts each season by whether you served their priority;
+    you do **politics** — *lobby* a member to warm them, or *move against* a hostile
+    one to have the board oust them (risky). **Clubhouse access** (tight / balanced
+    / loose) trades cohesion & bar takings against the odd costly clear-up
+    (`board.ts`, composite facilities from owned assets). *Still to do:* committee
+    objectives/job security as a firing threat.
   - *Done (sponsors):* **pitch-side sponsorship**. Each season a pool of local
     sponsor offers appears, scaled by club standing & tier; sign up to four to
     bank an up-front fee and put their **board on the sideline** (rendered in the

@@ -8,12 +8,23 @@ import { distanceKm } from "../data/geo";
  * sponsorship & gate money matter). All figures in kr.
  */
 export interface FinanceBreakdown {
-  income: { membership: number; sponsorship: number; matchday: number };
-  costs: { upkeep: number; kit: number; travel: number };
+  income: { membership: number; sponsorship: number; matchday: number; bar: number };
+  costs: { upkeep: number; kit: number; travel: number; rent: number };
   incomeTotal: number;
   costTotal: number;
   net: number;
 }
+
+export interface ClubOps {
+  clubhouse: number; // 0–3
+  access: "tight" | "balanced" | "loose";
+  fieldRented: boolean;
+  trainingRented: boolean;
+}
+const FIELD_RENT = 55000;
+const TRAINING_RENT = 30000;
+const BAR_PER_LEVEL = 26000;
+const ACCESS_BAR: Record<ClubOps["access"], number> = { tight: 0.45, balanced: 1, loose: 1.7 };
 
 const MEMBER_FEE = 1500; // per registered player, per year
 const SPONSOR_PER_REP = 1100; // × reputation × tier multiplier
@@ -37,22 +48,28 @@ export function computeFinances(
   tier: "allsvenskan" | "div1",
   homeMatches: number,
   awayOpponents: Team[],
-  facilities: number
+  facilities: number,
+  ops: ClubOps
 ): FinanceBreakdown {
   const membership = squadSize(reputation) * MEMBER_FEE;
   const sponsorship = Math.round(reputation * tierMultiplier(tier) * SPONSOR_PER_REP);
   const matchday = Math.round(homeMatches * reputation * GATE_PER_REP);
+  // clubhouse bar: more open access sells more beer
+  const bar = ops.clubhouse > 0
+    ? Math.round(ops.clubhouse * BAR_PER_LEVEL * ACCESS_BAR[ops.access] * (0.6 + reputation / 130))
+    : 0;
   const upkeep = facilities * UPKEEP_PER_FACILITY;
   const kit = KIT_INSURANCE;
   const travel = awayOpponents.reduce(
     (s, opp) => s + Math.round(distanceKm(club.city, opp.city) * TRAVEL_PER_KM),
     0
   );
-  const incomeTotal = membership + sponsorship + matchday;
-  const costTotal = upkeep + kit + travel;
+  const rent = (ops.fieldRented ? FIELD_RENT : 0) + (ops.trainingRented ? TRAINING_RENT : 0);
+  const incomeTotal = membership + sponsorship + matchday + bar;
+  const costTotal = upkeep + kit + travel + rent;
   return {
-    income: { membership, sponsorship, matchday },
-    costs: { upkeep, kit, travel },
+    income: { membership, sponsorship, matchday, bar },
+    costs: { upkeep, kit, travel, rent },
     incomeTotal,
     costTotal,
     net: incomeTotal - costTotal,

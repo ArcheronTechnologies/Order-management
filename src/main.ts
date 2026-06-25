@@ -9,10 +9,14 @@ import { Rng } from "./engine/rng";
 import type { Team } from "./engine/teams";
 import { UNION_POSITIONS, setRole, serializePlayer, deserializePlayer, buildSquad, squadSize } from "./engine/teams";
 import { SevensCup, sevensLineup, cupEntrants, ROUND_NAMES, type SevensTie } from "./engine/sevens";
-import { computeFinances, committeeMood, formatKr, facilityUpgradeCost, type FinanceBreakdown } from "./engine/finances";
+import { computeFinances, formatKr, type FinanceBreakdown } from "./engine/finances";
 import { pitchCondition, attendance as crowdAttendance, type MatchEnvironment, type SponsorBoard } from "./engine/matchday";
 import { generateOffers, settleSponsors, type SponsorOffer } from "./engine/sponsors";
 import { generateRecruitPool, signingFee, type Recruit } from "./engine/recruitment";
+import {
+  generateBoard, boardConfidence, moodLabel, holdVote, lobby, moveAgainst, updateBoard,
+  type BoardMember, type CapitalProposal,
+} from "./engine/board";
 import { developSquad, type SeasonDevelopment } from "./engine/development";
 import {
   applyTraining,
@@ -60,7 +64,9 @@ const sponsorsView = $("sponsorsView");
 const recruitView = $("recruitView");
 const newsView = $("newsView");
 const managerView = $("managerView");
-type ViewName = "career" | "season" | "match" | "squad" | "select" | "sevens" | "finances" | "sponsors" | "recruit" | "news" | "manager";
+const clubView = $("clubView");
+const boardView = $("boardView");
+type ViewName = "career" | "season" | "match" | "squad" | "select" | "sevens" | "finances" | "sponsors" | "recruit" | "news" | "manager" | "club" | "board";
 function showView(v: ViewName) {
   appView.classList.toggle("hidden", v !== "match");
   careerView.classList.toggle("hidden", v !== "career");
@@ -73,6 +79,8 @@ function showView(v: ViewName) {
   recruitView.classList.toggle("hidden", v !== "recruit");
   newsView.classList.toggle("hidden", v !== "news");
   managerView.classList.toggle("hidden", v !== "manager");
+  clubView.classList.toggle("hidden", v !== "club");
+  boardView.classList.toggle("hidden", v !== "board");
 }
 
 // ---- manager profile & career history ----
@@ -141,6 +149,139 @@ function renderManager() {
 $("managerBtn").addEventListener("click", renderManager);
 $("managerBack").addEventListener("click", () => renderSeason());
 
+// ====================== club operations (board-gated) ====================
+const FIELD_BUY = 250000;
+const TRAINING_BUY = 130000;
+function clubhouseBuildCost(level: number): number {
+  return (level + 1) * 80000;
+}
+function currentProposals(): CapitalProposal[] {
+  const props: CapitalProposal[] = [];
+  if (matchField === "rented")
+    props.push({ kind: "field", label: "Buy the match field (own your ground)", cost: FIELD_BUY, affordable: balance >= FIELD_BUY });
+  if (trainingGround === "rented")
+    props.push({ kind: "training", label: "Buy the training ground", cost: TRAINING_BUY, affordable: balance >= TRAINING_BUY });
+  if (clubhouse < 3) {
+    const c = clubhouseBuildCost(clubhouse);
+    props.push({ kind: "clubhouse", label: `Build ${CLUBHOUSE_NAMES[clubhouse + 1]}`, cost: c, affordable: balance >= c });
+  }
+  return props;
+}
+function renderClub() {
+  if (!season) return;
+  $("clubBalance").innerHTML = `Bank balance: <strong class="${balance < 0 ? "neg" : "pos"}">${formatKr(balance)}</strong> · Facilities level ${compositeFacilities()}/5`;
+  const assetRow = (label: string, status: string, prop?: CapitalProposal) =>
+    `<div class="asset-row"><div><span class="asset-name">${label}</span><span class="asset-status">${status}</span></div>` +
+    (prop
+      ? `<button class="primary-inline propose" data-kind="${prop.kind}" ${prop.affordable ? "" : "disabled"}>Propose: ${formatKr(prop.cost)}</button>`
+      : `<span class="asset-owned">Owned ✓</span>`) +
+    `</div>`;
+  const props = currentProposals();
+  const propOf = (k: string) => props.find((p) => p.kind === k);
+  $("clubAssets").innerHTML =
+    assetRow("Match field", matchField === "owned" ? "You own the ground — better pitch, no rent" : "Rented communal pitch — scruffy, costs rent", propOf("field")) +
+    assetRow("Training ground", trainingGround === "owned" ? "Your own training base — sharper sessions" : "Rented — limits training", propOf("training")) +
+    assetRow(`Clubhouse: ${CLUBHOUSE_NAMES[clubhouse]}`, clubhouse > 0 ? "Bar income, cohesion & prestige" : "No clubhouse — no bar, little cohesion", propOf("clubhouse"));
+  clubView.querySelectorAll<HTMLButtonElement>(".propose").forEach((b) =>
+    b.addEventListener("click", () => proposeProject(b.dataset.kind as CapitalProposal["kind"])));
+
+  // clubhouse access policy
+  const accNote = $("accessNote");
+  const accBtns = $("accessBtns");
+  if (clubhouse < 1) {
+    accNote.textContent = "Build a clubhouse first to set an access policy.";
+    accBtns.innerHTML = "";
+  } else {
+    accNote.innerHTML =
+      "How open is the clubhouse to the squad? <strong>Tight</strong> = less cohesion, less beer. " +
+      "<strong>Loose</strong> = more cohesion & bar takings, but the odd costly mess to clean up.";
+    const opts: { v: Access; label: string }[] = [
+      { v: "tight", label: "Tight control" }, { v: "balanced", label: "Balanced" }, { v: "loose", label: "Loose / open" },
+    ];
+    accBtns.innerHTML = opts
+      .map((o) => `<button class="tac-btn access ${clubAccess === o.v ? "on" : ""}" data-v="${o.v}">${o.label}</button>`)
+      .join("");
+    accBtns.querySelectorAll<HTMLButtonElement>(".access").forEach((b) =>
+      b.addEventListener("click", () => { clubAccess = b.dataset.v as Access; save(); renderClub(); }));
+  }
+  showView("club");
+}
+function proposeProject(kind: CapitalProposal["kind"]) {
+  if (!season) return;
+  const prop = currentProposals().find((p) => p.kind === kind);
+  if (!prop) return;
+  const vote = holdVote(board, prop, new Rng((seasonSeed * 333 + season.round * 17 + board.length + kind.length) >>> 0));
+  const tally = `${vote.yes}–${vote.no}`;
+  if (!vote.approved) {
+    logNews(`🗳️ Board rejected "${prop.label}" (${tally}).`);
+    alert(`The board votes ${tally} AGAINST.\nWin more of them over (lobby, results) and propose again.`);
+    renderClub();
+    return;
+  }
+  if (balance < prop.cost) return;
+  balance -= prop.cost;
+  investedThisSeason = true;
+  if (kind === "field") matchField = "owned";
+  else if (kind === "training") trainingGround = "owned";
+  else clubhouse = Math.min(3, clubhouse + 1);
+  syncUserFacilities();
+  logNews(`🏗️ Board approved "${prop.label}" (${tally}). Done.`);
+  save();
+  renderClub();
+}
+$("clubBtn").addEventListener("click", renderClub);
+$("clubBack").addEventListener("click", () => renderSeason());
+
+// ====================== the board & politics =============================
+function renderBoard() {
+  if (!season) return;
+  const conf = boardConfidence(board);
+  $("boardConfidence").innerHTML = `Boardroom confidence: <strong class="${conf < 40 ? "neg" : "pos"}">${conf}/100</strong> (${moodLabel(conf)})`;
+  $("boardActions").textContent = `${politicalActions} political move${politicalActions === 1 ? "" : "s"} left`;
+  $("boardMembers").innerHTML = board
+    .map(
+      (m) => `<div class="board-card">
+        <div class="bm-head"><span class="bm-name">${m.name}</span><span class="bm-role">${m.role}</span></div>
+        <div class="bm-prio">Cares about: <strong>${m.priority}</strong></div>
+        <div class="bm-mood"><span class="bm-bar"><span class="bm-fill" style="width:${m.approval}%"></span></span><span>${moodLabel(m.approval)} (${m.approval})</span></div>
+        <div class="bm-acts">
+          <button class="lobby" data-id="${m.id}" ${politicalActions <= 0 ? "disabled" : ""}>Lobby</button>
+          <button class="oust" data-id="${m.id}" ${politicalActions <= 0 || m.approval >= 42 ? "disabled" : ""}>Move against</button>
+        </div>
+      </div>`
+    )
+    .join("");
+  boardView.querySelectorAll<HTMLButtonElement>(".lobby").forEach((b) =>
+    b.addEventListener("click", () => doLobby(Number(b.dataset.id))));
+  boardView.querySelectorAll<HTMLButtonElement>(".oust").forEach((b) =>
+    b.addEventListener("click", () => doOust(Number(b.dataset.id))));
+  showView("board");
+}
+function doLobby(id: number) {
+  if (politicalActions <= 0) return;
+  const m = board.find((x) => x.id === id);
+  if (!m) return;
+  const gain = lobby(m, new Rng((seasonSeed * 71 + id * 13 + politicalActions) >>> 0));
+  politicalActions--;
+  logNews(`🤝 Lobbied ${m.name} (+${gain} approval).`);
+  save();
+  renderBoard();
+}
+function doOust(id: number) {
+  if (politicalActions <= 0) return;
+  const m = board.find((x) => x.id === id);
+  if (!m || m.approval >= 42) return;
+  if (!confirm(`Move against ${m.name} (${m.role})? If the board doesn't back you, the rest will turn on you.`)) return;
+  const res = moveAgainst(board, m, new Rng((seasonSeed * 97 + id * 29 + politicalActions) >>> 0));
+  politicalActions--;
+  if (res.ousted) logNews(`🪓 ${m.name} ousted from the board (${res.backers} backed you). ${res.replacement!.name} steps in.`);
+  else logNews(`❌ Move against ${m.name} failed (${res.backers} backed you) — the board resents it.`);
+  save();
+  renderBoard();
+}
+$("boardBtn").addEventListener("click", renderBoard);
+$("boardBack").addEventListener("click", () => renderSeason());
+
 // --- match view elements -------------------------------------------------
 const canvas = $("pitch") as HTMLCanvasElement;
 const renderer = new Renderer(canvas);
@@ -190,7 +331,11 @@ let currentEnv: MatchEnvironment | undefined; // home club's match-day environme
 /** Build the match-day environment for the home club (pitch, stand, crowd, boards). */
 function buildEnvironment(home: Team, away: Team): MatchEnvironment {
   const fac = currentFacilities(home);
-  const ground = home.ground ?? (fac >= 3 ? "owned" : "shared");
+  // your own club's ground reflects whether you own or rent the match field
+  const ground: "owned" | "shared" =
+    season && home === season.userClub
+      ? matchField === "owned" ? "owned" : "shared"
+      : home.ground ?? (fac >= 3 ? "owned" : "shared");
   const rep = season ? season.repOf(home) : repState[home.short] ?? home.reputation;
   // recent form lifts the gate — use the home club's win rate this season if known
   let formBonus = 0;
@@ -308,6 +453,7 @@ function currentTier(club: Team): "allsvenskan" | "div1" {
   return tiers[club.short] ?? club.tier;
 }
 function currentFacilities(club: Team): number {
+  if (season && club === season.userClub) return compositeFacilities();
   return facState[club.short] ?? club.facilities;
 }
 function resetWorld() {
@@ -320,6 +466,45 @@ function resetWorld() {
     facState[c.short] = c.facilities;
   }
 }
+
+// ---- club assets: the things you actually own/build (board-gated) ----
+type Ownership = "rented" | "owned";
+type Access = "tight" | "balanced" | "loose";
+let clubhouse = 0; // 0 none, 1 portacabin, 2 clubhouse, 3 pavilion
+let matchField: Ownership = "rented";
+let trainingGround: Ownership = "rented";
+let clubAccess: Access = "balanced";
+const CLUBHOUSE_NAMES = ["No clubhouse", "Portacabin", "Clubhouse", "Pavilion"];
+
+/** Your club's facilities level is the sum of what you own & have built (1–5). */
+function compositeFacilities(): number {
+  return Math.max(1, Math.min(5,
+    1 + clubhouse + (matchField === "owned" ? 1 : 0) + (trainingGround === "owned" ? 1 : 0)));
+}
+/** Seed the asset model from a club's starting facilities so nothing jumps. */
+function deriveAssets(facilities: number) {
+  matchField = facilities >= 4 ? "owned" : "rented";
+  trainingGround = facilities >= 3 ? "owned" : "rented";
+  clubhouse = Math.max(0, Math.min(3, facilities - 1 - (matchField === "owned" ? 1 : 0) - (trainingGround === "owned" ? 1 : 0)));
+  clubAccess = "balanced";
+}
+/** Keep the world-wide facilities map in step with the user's assets. */
+function syncUserFacilities() {
+  if (!season) return;
+  const f = compositeFacilities();
+  facState[season.userClub.short] = f;
+  season.facilities.set(season.userClub, f);
+}
+
+// ---- the board & politics ----
+let board: BoardMember[] = [];
+let politicalActions = 2; // lobbying/manoeuvring chances per season
+let investedThisSeason = false; // a board priority: did you build/buy this year?
+let pendingBoardOutcome: {
+  finishPos: number; divisionSize: number; promoted: boolean; relegated: boolean;
+  balance: number; invested: boolean; youthPlayed: boolean; attendanceGood: boolean;
+  tierBefore: "allsvenskan" | "div1";
+} | null = null;
 function divisionLabel(club: Team): string {
   const t = currentTier(club) === "allsvenskan" ? "Allsvenskan" : "Division 1";
   return `${t} ${club.region === "north" ? "North" : "South"}`;
@@ -333,7 +518,9 @@ function currentSeasonFinances(): FinanceBreakdown | null {
   const userFixtures = season.fixtures.filter((f) => f.home === user || f.away === user);
   const homeMatches = userFixtures.filter((f) => f.home === user).length;
   const awayOpponents = userFixtures.filter((f) => f.away === user).map((f) => f.home);
-  return computeFinances(user, season.repOf(user), currentTier(user), homeMatches, awayOpponents, currentFacilities(user));
+  return computeFinances(user, season.repOf(user), currentTier(user), homeMatches, awayOpponents, currentFacilities(user), {
+    clubhouse, access: clubAccess, fieldRented: matchField === "rented", trainingRented: trainingGround === "rented",
+  });
 }
 
 function renderFinances() {
@@ -341,32 +528,24 @@ function renderFinances() {
   const fin = currentSeasonFinances()!;
   $("financesClub").textContent = `${season.userClub.name} — finances`;
   $("finBalance").innerHTML = `Bank balance: <strong class="${balance < 0 ? "neg" : "pos"}">${formatKr(balance)}</strong>`;
-  const pos = season.table().findIndex((r) => r.team === season!.userClub) + 1;
-  const mood = committeeMood(balance, pos || season.clubs.length, season.clubs.length);
-  $("finCommittee").innerHTML = `Committee: <strong>${mood.label}</strong> (${mood.score}/100)`;
-  // facilities + upgrade
+  const conf = boardConfidence(board);
+  $("finCommittee").innerHTML = `Board confidence: <strong>${moodLabel(conf)}</strong> (${conf}/100) — see the Board screen`;
+  // facilities (built & owned via the Club screen, board permitting)
   const fac = currentFacilities(season.userClub);
-  const facEl = $("finFacilities");
-  const upBtn = $("finUpgrade") as HTMLButtonElement;
-  facEl.innerHTML = `Facilities: <strong>${"★".repeat(fac)}${"☆".repeat(5 - fac)}</strong> (level ${fac}/5)`;
-  if (fac >= 5) {
-    upBtn.classList.add("hidden");
-  } else {
-    const cost = facilityUpgradeCost(fac);
-    upBtn.classList.remove("hidden");
-    upBtn.textContent = `Upgrade → level ${fac + 1} (${formatKr(cost)})`;
-    upBtn.disabled = balance < cost;
-  }
+  $("finFacilities").innerHTML = `Facilities: <strong>${"★".repeat(fac)}${"☆".repeat(5 - fac)}</strong> (level ${fac}/5) — manage on the Club screen`;
+  ($("finUpgrade") as HTMLButtonElement).classList.add("hidden");
   const row = (label: string, v: number) => `<li><span>${label}</span><span>${formatKr(v)}</span></li>`;
   $("finIncome").innerHTML =
     row("Membership fees", fin.income.membership) +
     row("Sponsorship", fin.income.sponsorship) +
     row("Matchday (gate)", fin.income.matchday) +
+    (fin.income.bar ? row("Clubhouse bar", fin.income.bar) : "") +
     `<li class="fin-tot"><span>Total income</span><span>${formatKr(fin.incomeTotal)}</span></li>`;
   $("finCosts").innerHTML =
     row("Facilities upkeep", fin.costs.upkeep) +
     row("Kit & insurance", fin.costs.kit) +
     row("Travel", fin.costs.travel) +
+    (fin.costs.rent ? row("Ground / pitch rent", fin.costs.rent) : "") +
     `<li class="fin-tot"><span>Total costs</span><span>${formatKr(fin.costTotal)}</span></li>`;
   const projected = balance + fin.net;
   $("finNote").innerHTML = `Projected at season end: <strong class="${fin.net < 0 ? "neg" : "pos"}">${fin.net >= 0 ? "+" : ""}${formatKr(fin.net)}</strong> → balance <strong>${formatKr(projected)}</strong>.` +
@@ -418,19 +597,8 @@ function signSponsor(id: number) {
 }
 $("sponsorsBtn").addEventListener("click", renderSponsors);
 $("sponsorsBack").addEventListener("click", () => renderSeason());
-$("finUpgrade").addEventListener("click", () => {
-  if (!season) return;
-  const club = season.userClub;
-  const fac = currentFacilities(club);
-  const cost = facilityUpgradeCost(fac);
-  if (fac >= 5 || balance < cost) return;
-  balance -= cost;
-  facState[club.short] = fac + 1;
-  season.facilities.set(club, fac + 1); // so this season's reputation pull uses it
-  logNews(`🏗️ Facilities upgraded to level ${fac + 1}`);
-  save();
-  renderFinances();
-});
+// facilities are now built/bought through the board-gated Club Operations screen
+// (capital projects), not a flat finance-screen upgrade.
 
 const tacticsPanel = createTacticsPanel((t) => {
   userTactics = t;
@@ -684,6 +852,10 @@ function save() {
     managerName,
     careerHistory,
     careerRec: [careerW, careerD, careerL],
+    assets: { clubhouse, matchField, trainingGround, clubAccess },
+    board,
+    politicalActions,
+    investedThisSeason,
     tactics: userTactics,
     results: season.fixtures
       .filter((f) => f.played)
@@ -709,6 +881,16 @@ function load(): boolean {
     if (d.tiers) Object.assign(tiers, d.tiers);
     if (d.reputation) Object.assign(repState, d.reputation);
     if (d.facilities) Object.assign(facState, d.facilities);
+    // restore club assets (or derive from the club's facilities for old saves)
+    if (d.assets) {
+      clubhouse = d.assets.clubhouse ?? 0;
+      matchField = d.assets.matchField ?? "rented";
+      trainingGround = d.assets.trainingGround ?? "rented";
+      clubAccess = d.assets.clubAccess ?? "balanced";
+    } else {
+      deriveAssets(facState[user.short] ?? user.facilities);
+    }
+    facState[user.short] = compositeFacilities(); // keep the map in step with assets
     // carry the saved persistent squad so years of development survive a reload
     const carry = Array.isArray(d.roster)
       ? new Map<Team, Player[]>([[user, d.roster.map(deserializePlayer)]])
@@ -733,6 +915,9 @@ function load(): boolean {
       refreshRecruits();
     }
     news = Array.isArray(d.news) ? d.news : [];
+    board = Array.isArray(d.board) && d.board.length ? d.board : generateBoard(new Rng((seasonSeed * 613 + 7) >>> 0));
+    politicalActions = d.politicalActions ?? 2;
+    investedThisSeason = !!d.investedThisSeason;
     managerName = d.managerName ?? "Coach";
     careerHistory = Array.isArray(d.careerHistory) ? d.careerHistory : [];
     [careerW, careerD, careerL] = Array.isArray(d.careerRec) ? d.careerRec : [0, 0, 0];
@@ -809,6 +994,11 @@ function startCareer(club: Team) {
   managerName = ($("managerNameInput") as HTMLInputElement).value.trim() || "Coach";
   careerHistory = [];
   careerW = careerD = careerL = 0;
+  deriveAssets(club.facilities);
+  syncUserFacilities();
+  board = generateBoard(new Rng((seasonSeed * 613 + 7) >>> 0));
+  politicalActions = 2;
+  investedThisSeason = false;
   refreshSponsors();
   refreshRecruits();
   logNews(`📅 ${managerName} takes charge of ${club.name} in ${divisionLabel(club)}.`);
@@ -1095,6 +1285,28 @@ function startNextSeason() {
     });
   }
   if (lastSponsorPayout) logNews(`💰 Sponsors paid out ${formatKr(lastSponsorPayout.total)} (${lastSponsorPayout.met}/${lastSponsorPayout.of} goals).`);
+  // an open clubhouse occasionally needs an expensive clear-up
+  if (clubhouse > 0 && clubAccess === "loose") {
+    const dRng = new Rng((seasonSeed * 401 + season.year * 13) >>> 0);
+    if (dRng.chance(0.4)) {
+      const bill = Math.round(dRng.range(15000, 45000));
+      balance -= bill;
+      logNews(`🍺 Clubhouse damage after a loose season — ${formatKr(bill)} to put right.`);
+    }
+  }
+  // capture the facts the board will judge you on (promotion/relegation known at finalize)
+  const myRep = Math.round(season.repOf(season.userClub));
+  pendingBoardOutcome = {
+    finishPos,
+    divisionSize: season.clubs.length,
+    promoted: false,
+    relegated: false,
+    balance,
+    invested: investedThisSeason,
+    youthPlayed: season.rosterFor(season.userClub).filter((p) => p.age <= 21).length >= 3,
+    attendanceGood: crowdAttendance(myRep, currentFacilities(season.userClub)) >= 0.45,
+    tierBefore: currentTier(season.userClub),
+  };
 
   if (userPlayoff) {
     playoffTie = userPlayoff;
@@ -1177,6 +1389,24 @@ function finalizeRollover() {
   const carry = new Map<Team, Player[]>([[user, lastDev.roster]]);
   seasonSeed = (seasonSeed * 1103515245 + 12345) >>> 0;
   season = new Season(divisionFor(user), user, seasonSeed, { reputation: repState, facilities: facState, year }, carry);
+  syncUserFacilities();
+  // the board passes judgement on the season just gone (now promotion is known)
+  if (pendingBoardOutcome) {
+    const tierAfter = currentTier(user);
+    updateBoard(board, {
+      ...pendingBoardOutcome,
+      promoted: pendingBoardOutcome.tierBefore === "div1" && tierAfter === "allsvenskan",
+      relegated: pendingBoardOutcome.tierBefore === "allsvenskan" && tierAfter === "div1",
+    }, new Rng((seasonSeed * 211 + year) >>> 0));
+    pendingBoardOutcome = null;
+  }
+  politicalActions = 2;
+  investedThisSeason = false;
+  // clubhouse cohesion: an open clubhouse builds togetherness over the off-season
+  if (clubhouse > 0) {
+    const lift = clubAccess === "loose" ? 5 : clubAccess === "balanced" ? 2 : -1;
+    for (const p of season.rosterFor(user)) p.condition.morale = Math.max(0, Math.min(100, p.condition.morale + lift));
+  }
   lastSnubs = [];
   lastMom = null;
   lastRatings = [];
@@ -1185,7 +1415,7 @@ function finalizeRollover() {
   gfTie = null;
   refreshSponsors();
   refreshRecruits();
-  logNews(`📅 Year ${season.year}: ${divisionLabel(season.userClub)} season begins.`);
+  logNews(`📅 Year ${season.year}: ${divisionLabel(season.userClub)} season begins. Board confidence ${boardConfidence(board)}/100.`);
   save();
   renderSeason();
 }
@@ -1407,7 +1637,7 @@ function finishUserMatch() {
   lastTraining = applyTraining(
     season.rosterFor(season.userClub),
     trainingPlan,
-    season.repOf(season.userClub),
+    season.repOf(season.userClub) + (trainingGround === "owned" ? 8 : 0), // your own base = better turnout/sessions
     new Rng((availSeed * 19 + season.round * 3) >>> 0)
   );
   simRestOfRound(currentFixture);
