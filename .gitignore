@@ -3,3 +3,7 @@ dist/
 *.local
 .DS_Store
 .vite/
+
+# local playwright smoke tests
+_smoke*.mjs
+_shot.mjs
