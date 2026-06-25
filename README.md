@@ -22,8 +22,15 @@ See `docs`/the plan for the full scope & roadmap.
   **fixtures**, and a **champion** at the end of the season.
 - **Play your matches** (watch the dots with your tactics) or **Sim** them
   instantly; the rest of the league is quick-simmed around you.
-- Your tactics and season **save automatically** (localStorage) and resume on
-  reload.
+- A **squad** of 23 named players with deep FM-style data (technical attributes,
+  current/potential ability, personality, traits, and a **day job**).
+- **Team selection** with the amateur twist: each match some players are
+  unavailable — stuck at **work**, **family/personal**, a **no-show**, or
+  **injured** — and you pick your XV from who's actually available. Players carry
+  **fitness, sharpness and injuries** that tire in matches and recover between
+  rounds.
+- Your tactics, season and squad condition **save automatically** (localStorage)
+  and resume on reload.
 
 **Match engine** ✅ and **match & tactics depth** ✅. The match itself is a
 watchable, self-contained game of rugby:

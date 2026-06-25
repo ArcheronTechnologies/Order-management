@@ -99,6 +99,30 @@
       </div>
     </div>
 
+    <div id="selectView" class="view hidden">
+      <header class="topbar">
+        <h1>Fly-Half <span class="sub" id="selectTitle">team selection</span></h1>
+        <div class="controls">
+          <button id="autoPickBtn">Auto-pick</button>
+          <button id="kickOffBtn" class="primary-inline">Kick off ›</button>
+          <button id="selectBack">‹ Season</button>
+        </div>
+      </header>
+      <p class="select-note" id="availSummary"></p>
+      <div class="select-grid">
+        <section class="panel">
+          <h2>Starting XV</h2>
+          <div id="xvSlots" class="xv-slots"></div>
+        </section>
+        <section class="panel">
+          <h2>Available replacements</h2>
+          <ul id="benchList" class="avail-list"></ul>
+          <h2 class="unavail-h">Unavailable</h2>
+          <ul id="unavailList" class="avail-list out"></ul>
+        </section>
+      </div>
+    </div>
+
     <div id="squadView" class="view hidden">
       <header class="topbar">
         <h1>Fly-Half <span class="sub" id="squadClub">squad</span></h1>

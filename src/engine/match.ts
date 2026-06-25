@@ -205,7 +205,9 @@ export class Match {
       // too, so only a genuinely quicker player finishes the line break
       burst = p.id === this.breakawayId ? 1.18 : p.side !== this.possession ? 1.14 : 1;
     }
-    return base * (1 - 0.4 * p.fatigue) * burst;
+    // unfit players carry less around the park
+    const fit = 0.82 + 0.18 * (p.condition.fitness / 100);
+    return base * (1 - 0.4 * p.fatigue) * burst * fit;
   }
   private moveToward(p: Player, tx: number, ty: number, spd: number, dt: number) {
     const d = dist(p.x, p.y, tx, ty);

@@ -6,6 +6,16 @@ import { PRESETS, type TeamTactics } from "./engine/tactics";
 import { Season, quickSim, type Fixture } from "./engine/season";
 import { Rng } from "./engine/rng";
 import type { Team } from "./engine/teams";
+import { UNION_POSITIONS } from "./engine/teams";
+import {
+  rollAvailability,
+  autoSelect,
+  applyLineup,
+  applyPostMatch,
+  applyWeeklyRecovery,
+  fitScore,
+  type Availability,
+} from "./engine/availability";
 import { createTacticsPanel } from "./ui/tactics-panel";
 
 const $ = <T extends HTMLElement>(id: string): T => {
@@ -19,12 +29,14 @@ const appView = $("app");
 const careerView = $("careerSetup");
 const seasonView = $("seasonView");
 const squadView = $("squadView");
-type ViewName = "career" | "season" | "match" | "squad";
+const selectView = $("selectView");
+type ViewName = "career" | "season" | "match" | "squad" | "select";
 function showView(v: ViewName) {
   appView.classList.toggle("hidden", v !== "match");
   careerView.classList.toggle("hidden", v !== "career");
   seasonView.classList.toggle("hidden", v !== "season");
   squadView.classList.toggle("hidden", v !== "squad");
+  selectView.classList.toggle("hidden", v !== "select");
 }
 
 // --- match view elements -------------------------------------------------
@@ -109,6 +121,13 @@ function save() {
     results: season.fixtures
       .filter((f) => f.played)
       .map((f) => ({ r: f.round, h: f.home.short, a: f.away.short, hs: f.homeScore, as: f.awayScore, ht: f.homeTries, at: f.awayTries })),
+    // player condition for your club (in roster order — stable across reloads)
+    condition: season.rosterFor(season.userClub).map((p) => [
+      Math.round(p.condition.fitness),
+      Math.round(p.condition.sharpness),
+      Math.round(p.condition.morale),
+      p.condition.injuredWeeks,
+    ]),
   };
   localStorage.setItem(SAVE_KEY, JSON.stringify(data));
 }
@@ -127,6 +146,12 @@ function load(): boolean {
     for (const r of d.results ?? []) {
       const f = season.fixtures.find((x) => x.round === r.r && x.home.short === r.h && x.away.short === r.a);
       if (f) season.record(f, r.hs, r.as, r.ht, r.at);
+    }
+    if (Array.isArray(d.condition)) {
+      const roster = season.rosterFor(user);
+      d.condition.forEach((c: number[], i: number) => {
+        if (roster[i]) roster[i].condition = { fitness: c[0], sharpness: c[1], morale: c[2], injuredWeeks: c[3] };
+      });
     }
     return true;
   } catch {
@@ -230,12 +255,91 @@ playRoundBtn.addEventListener("click", () => {
   if (!season) return;
   const userFx = season.userFixture(season.round);
   if (userFx) {
-    startUserMatch(userFx);
+    renderSelect(userFx);
   } else {
     simRestOfRound(null);
     season.round++;
     renderSeason();
   }
+});
+
+// ====================== team selection ===================================
+let pendingFixture: Fixture | null = null;
+let availability: Availability[] = [];
+let availSeed = 0;
+const xvSlots = $("xvSlots");
+const benchList = $("benchList");
+const unavailList = $("unavailList");
+
+function renderSelect(fixture: Fixture) {
+  if (!season) return;
+  pendingFixture = fixture;
+  const roster = season.rosterFor(season.userClub);
+  availSeed = (seasonSeed * 1000 + season.round) >>> 0;
+  availability = rollAvailability(roster, availSeed);
+  const availableIds = new Set(availability.filter((a) => a.available).map((a) => a.player.id));
+  const starters = autoSelect(roster, availableIds);
+
+  const opp = fixture.home === season.userClub ? fixture.away : fixture.home;
+  $("selectTitle").textContent = `${season.userClub.name} v ${opp.name}`;
+  const out = availability.filter((a) => !a.available).length;
+  $("availSummary").textContent = `${availableIds.size} available, ${out} unavailable — pick your XV.`;
+
+  // starting XV: one select per shirt, options = available players by fit
+  const avail = availability.filter((a) => a.available).map((a) => a.player);
+  xvSlots.innerHTML = "";
+  UNION_POSITIONS.forEach((pos, i) => {
+    const row = document.createElement("div");
+    row.className = "xv-row";
+    const sel = document.createElement("select");
+    sel.dataset.slot = String(i);
+    const opts = [...avail].sort((a, b) => fitScore(b, pos.short) - fitScore(a, pos.short));
+    sel.innerHTML = opts
+      .map((p) => `<option value="${p.id}">${p.position.short} ${p.name} (${p.hidden.currentAbility})</option>`)
+      .join("");
+    if (starters[i]) sel.value = String(starters[i].id);
+    sel.addEventListener("change", refreshBench);
+    row.innerHTML = `<span class="slot-pos">${pos.short}</span>`;
+    row.appendChild(sel);
+    xvSlots.appendChild(row);
+  });
+
+  unavailList.innerHTML = availability
+    .filter((a) => !a.available)
+    .map((a) => `<li><span>${a.player.position.short} ${a.player.name}</span><span class="reason">${a.reason}</span></li>`)
+    .join("") || `<li class="none">Everyone's available!</li>`;
+
+  refreshBench();
+  showView("select");
+}
+
+function selectedIds(): number[] {
+  return [...xvSlots.querySelectorAll("select")].map((s) => Number((s as HTMLSelectElement).value));
+}
+
+function refreshBench() {
+  const chosen = new Set(selectedIds());
+  const bench = availability
+    .filter((a) => a.available && !chosen.has(a.player.id))
+    .map((a) => `<li><span>${a.player.position.short} ${a.player.name}</span><span class="ca">${a.player.hidden.currentAbility}</span></li>`);
+  benchList.innerHTML = bench.join("") || `<li class="none">No replacements left</li>`;
+}
+
+$("autoPickBtn").addEventListener("click", () => {
+  if (pendingFixture) renderSelect(pendingFixture);
+});
+$("selectBack").addEventListener("click", () => renderSeason());
+$("kickOffBtn").addEventListener("click", () => {
+  if (!season || !pendingFixture) return;
+  const roster = season.rosterFor(season.userClub);
+  let ids = [...new Set(selectedIds())].filter(Boolean);
+  // top up to 15 from any remaining available players
+  for (const a of availability) {
+    if (ids.length >= 15) break;
+    if (a.available && !ids.includes(a.player.id)) ids.push(a.player.id);
+  }
+  applyLineup(roster, ids.slice(0, 15));
+  startUserMatch(pendingFixture);
 });
 
 $("newCareer").addEventListener("click", () => {
@@ -253,6 +357,11 @@ function startUserMatch(fixture: Fixture) {
   const home = fixture.home;
   const away = fixture.away;
   const userIsHome = home === season!.userClub;
+  // the AI opponent also has availability and fields its best available XV
+  const aiClub = userIsHome ? away : home;
+  const aiRoster = season!.rosterFor(aiClub);
+  const aiAvail = rollAvailability(aiRoster, (availSeed * 7 + 3) >>> 0);
+  autoSelect(aiRoster, new Set(aiAvail.filter((a) => a.available).map((a) => a.player.id)));
   // user's tactics go on their side; AI picks a preset
   const aiTactics = PRESETS[(seasonSeed + fixture.round) % PRESETS.length].tactics;
   const seed = (seasonSeed * 131 + fixture.round * 7) >>> 0;
@@ -284,6 +393,9 @@ function finishUserMatch() {
   const ht = match.events.filter((e) => e.kind === "try" && e.side === "home").length;
   const at = match.events.filter((e) => e.kind === "try" && e.side === "away").length;
   season.record(currentFixture, match.score.home, match.score.away, ht, at);
+  // your XV tire & risk knocks; then the whole league recovers a week
+  applyPostMatch(season.rosterFor(season.userClub), (availSeed * 13 + 9) >>> 0);
+  for (const c of season.clubs) applyWeeklyRecovery(season.rosterFor(c));
   simRestOfRound(currentFixture);
   season.round++;
   currentFixture = null;
