@@ -161,3 +161,102 @@ html, body {
   .stage { grid-template-columns: 1fr; }
   .feed { max-height: 180px; }
 }
+
+/* --- tactics drawer --- */
+.drawer {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  justify-content: flex-end;
+  z-index: 50;
+}
+.drawer.hidden { display: none; }
+.drawer-panel {
+  width: 420px;
+  max-width: 92vw;
+  height: 100%;
+  background: var(--panel);
+  border-left: 1px solid var(--line);
+  padding: 18px 20px 28px;
+  overflow-y: auto;
+  box-shadow: -12px 0 40px rgba(0, 0, 0, 0.4);
+}
+.drawer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.drawer-head h2 { margin: 0; font-size: 18px; }
+.drawer-head #tacticsTeam { color: var(--accent); }
+#tacticsClose {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 26px;
+  line-height: 1;
+  cursor: pointer;
+}
+#tacticsClose:hover { color: var(--text); }
+.drawer-hint { color: var(--muted); font-size: 12px; margin: 6px 0 16px; line-height: 1.5; }
+
+.tac-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+.tac-row label { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); }
+.tac-row select {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 14px;
+}
+
+.tac-group { margin-bottom: 20px; }
+.tac-group h3 {
+  margin: 0 0 8px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: var(--muted);
+}
+.btnrow { display: flex; gap: 8px; flex-wrap: wrap; }
+.btnrow button {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.btnrow button:hover { border-color: var(--accent); }
+.btnrow button.active {
+  background: var(--accent);
+  color: #06140c;
+  border-color: var(--accent);
+  font-weight: 700;
+}
+.blurb { color: var(--muted); font-size: 12px; line-height: 1.5; margin: 8px 0 0; }
+
+.slider { margin-bottom: 14px; }
+.slider-head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+.slider-head .val { color: var(--accent); font-variant-numeric: tabular-nums; }
+.slider input[type="range"] { width: 100%; accent-color: var(--accent); }
+.slider-ends {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}

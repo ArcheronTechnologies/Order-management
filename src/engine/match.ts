@@ -10,8 +10,14 @@ import {
   attackDir,
 } from "./formats";
 import { buildSquad, type Team } from "./teams";
-import { DEFAULT_TACTICS, lerpSlider, type TeamTactics } from "./tactics";
-import type { Ball, Phase, Player, ScoreEvent, Side } from "./types";
+import {
+  DEFAULT_TACTICS,
+  lerpSlider,
+  FORMATION_PODS,
+  type TeamTactics,
+  type DefensiveSystem,
+} from "./tactics";
+import type { Attributes, Ball, Phase, Player, ScoreEvent, Side } from "./types";
 
 const TACKLE_RADIUS = 1.3; // m
 const PASS_SPEED = 13; // m/s
@@ -122,6 +128,11 @@ export class Match {
   get totalTime(): number {
     return this.fmt.halfLength * 2;
   }
+
+  /** live tactics change (touchline) — applies from the next phase. */
+  setTactics(side: Side, patch: Partial<TeamTactics>) {
+    this.tactics[side] = { ...this.tactics[side], ...patch };
+  }
   private side(s: Side): Player[] {
     return this.players.filter((p) => p.side === s);
   }
@@ -135,9 +146,36 @@ export class Match {
   // --- tactics helpers -----------------------------------------------------
   /** how far ahead the defence (opponents of `att`) sets its line. */
   private defGap(att: Side): number {
-    // hard rush → smaller gap (up fast & close); passive → sit back deeper.
-    // A tight gain line keeps territorial gains realistic (a few metres a phase).
-    return lerpSlider(this.tactics[this.opp(att)].defensiveLineSpeed, 6, 3);
+    // The defensive system sets how far off the line sits; the line-speed slider
+    // tunes it. Blitz lines up fast and close; drift sits a touch deeper.
+    const tac = this.tactics[this.opp(att)];
+    switch (tac.defensiveSystem) {
+      case "blitz":
+        return lerpSlider(tac.defensiveLineSpeed, 4.5, 2);
+      case "drift":
+        return lerpSlider(tac.defensiveLineSpeed, 7, 4);
+      default: // umbrella
+        return lerpSlider(tac.defensiveLineSpeed, 6, 3);
+    }
+  }
+
+  private defSystem(att: Side): DefensiveSystem {
+    return this.tactics[this.opp(att)].defensiveSystem;
+  }
+
+  /** average of an attribute across the on-field players of a side. */
+  private avgAttr(side: Side, attr: keyof Attributes): number {
+    const list = this.side(side);
+    return list.reduce((s, p) => s + p.attr[attr], 0) / Math.max(1, list.length);
+  }
+
+  /** chance a pass from this player goes forward / loose — handling + nous. */
+  private handlingErrorP(p: Player): number {
+    return clamp(
+      0.05 + (12 - p.attr.handling) * 0.006 - (p.attr.decisionMaking - 10) * 0.004,
+      0.015,
+      0.13
+    );
   }
 
   private say(text: string, kind?: CommentaryLine["kind"]) {
@@ -328,12 +366,13 @@ export class Match {
   }
 
   private resolveLanding() {
-    // nearest player of each side
+    // who gets to the ball — the nearest, but a well-positioned player reads the
+    // flight and effectively gets there from further away
     let best: Player | null = null;
     let bestD = Infinity;
     for (const p of this.players) {
       if (p === this.ball.thrownBy) continue;
-      const d = dist(p.x, p.y, this.ball.x, this.ball.y);
+      const d = dist(p.x, p.y, this.ball.x, this.ball.y) - p.attr.positioning * 0.12;
       if (d < bestD) {
         bestD = d;
         best = p;
@@ -515,16 +554,23 @@ export class Match {
       .slice(0, 2);
     inLine.sort((a, b) => (a.y - b.y) * os);
     const n = inLine.length;
+    const sys = this.defSystem(att);
     inLine.forEach((p, i) => {
       let ty: number;
       const m = markers.indexOf(p);
       if (m >= 0) {
-        ty = focusY + (m === 0 ? 0 : focusY < ay ? 2 : -2);
+        // drift shades the marker a touch inside (push the carrier to the touch)
+        const driftInside = sys === "drift" ? -os * 1.2 : 0;
+        ty = focusY + (m === 0 ? 0 : focusY < ay ? 2 : -2) + driftInside;
       } else {
         const f = n > 1 ? i / (n - 1) : 0;
         ty = fromY + (farY - fromY) * f;
       }
-      this.moveToward(p, lineX, clamp(ty, 3, PITCH.width - 3), this.speed(p), dt);
+      // umbrella: the wider you are from the ball, the deeper you sit (curved line)
+      const px = sys === "umbrella"
+        ? this.defLineX(att, this.openAnchorX, gap + Math.min(9, Math.abs(ty - focusY) * 0.28))
+        : lineX;
+      this.moveToward(p, px, clamp(ty, 3, PITCH.width - 3), this.speed(p), dt);
     });
   }
 
@@ -544,17 +590,26 @@ export class Match {
     const fh = this.byRole(att, "FH");
     const mates = this.side(att).filter((p) => !exclude.has(p.id));
 
-    // Forwards form tight pods: the first pod just to the open side of the ruck
-    // at the gain line (carry option), a second pod a bit wider, any spare on
-    // the blindside. Within a pod players bind close and stagger a touch back.
+    // Forwards form pods per the chosen formation (1-3-3-1 / 2-4-2 / 1-3-2-2):
+    // each pod is a tight cluster at the gain line in its lane across the field.
     const fwds = mates.filter((p) => p.forward);
-    fwds.forEach((p, i) => {
-      const pod = Math.floor(i / 3);
-      const inPod = i % 3;
-      const podY = ay + os * (5 + pod * 13 + inPod * 2.3);
-      const podX = ax - dir * (1 + inPod * 0.9 + pod * 0.5);
-      this.moveToward(p, onX(podX), onY(podY), this.speed(p) * 0.8, dt);
-    });
+    const pods = this.fmt.id === "sevens"
+      ? [{ size: fwds.length, lane: 0.2 }]
+      : FORMATION_PODS[this.tactics[att].attackFormation];
+    const toTouch = os > 0 ? PITCH.width - 6 - ay : ay - 6; // open-side distance
+    let fi = 0;
+    for (const pod of pods) {
+      const baseY = pod.lane < 0 ? ay - os * 9 : ay + os * (pod.lane * Math.max(8, toTouch));
+      for (let k = 0; k < pod.size && fi < fwds.length; k++, fi++) {
+        const p = fwds[fi];
+        const podX = ax - dir * (1 + k * 0.9);
+        const podY = baseY + os * k * 2.2;
+        this.moveToward(p, onX(podX), onY(podY), this.speed(p) * 0.8, dt);
+      }
+    }
+    for (; fi < fwds.length; fi++) {
+      this.moveToward(fwds[fi], onX(ax - dir * 2), onY(ay + os * 6), this.speed(fwds[fi]) * 0.8, dt);
+    }
 
     // half-backs: 9 at the base, 10 at first-receiver depth a few metres open
     if (sh && !exclude.has(sh.id)) this.moveToward(sh, onX(ax - dir * 2), onY(ay), this.speed(sh) * 0.9, dt);
@@ -625,8 +680,10 @@ export class Match {
       for (const p of defList) {
         if (this.beaten.has(p.id)) continue;
         if (Math.abs(p.x - lineX) > 3) continue; // must be set on the line
+        // a well-positioned defender reads the line and covers a wider channel
+        const reach = 1.6 + p.attr.positioning * 0.07;
         const dy = Math.abs(p.y - carrier.y);
-        if (dy <= 2.2 && dy < gd) {
+        if (dy <= reach && dy < gd) {
           gd = dy;
           gatekeeper = p;
         }
@@ -748,7 +805,7 @@ export class Match {
     if (this.play === "wide" && insideBack && this.rng.chance(0.85)) {
       const out = this.nextReceiver(carrier, att, dir);
       if (out) {
-        if (this.rng.chance(clamp(0.04 + (12 - carrier.attr.handling) * 0.005, 0.02, 0.1))) {
+        if (this.rng.chance(this.handlingErrorP(carrier))) {
           this.say(`Forward pass, ${this.teamOf(att).short}. Scrum.`);
           this.startScrum(def, carrier.x, carrier.y);
           return;
@@ -771,8 +828,7 @@ export class Match {
       const receiver = this.nextReceiver(carrier, att, dir) ?? this.bestSupport(carrier, att, dir);
       if (receiver) {
         // forward pass — a handling error, called back for a scrum the other way
-        const forwardPassP = clamp(0.05 + (12 - carrier.attr.handling) * 0.006, 0.02, 0.13);
-        if (this.rng.chance(forwardPassP)) {
+        if (this.rng.chance(this.handlingErrorP(carrier))) {
           this.say(`Forward pass, ${this.teamOf(att).short}. Scrum.`);
           this.startScrum(def, carrier.x, carrier.y);
           return;
@@ -818,20 +874,32 @@ export class Match {
     // Sustained pressure tells: the more phases a side strings together near the
     // line, the more the defence tires and fractures, so breaks get more likely.
     const pressure = nearLine ? Math.min(this.phaseCount, 12) * 0.006 : 0;
-    // an aggressive defensive side makes its tackles stick (harder to break)
+    // an aggressive defensive side makes its tackles stick (harder to break);
+    // a blitz shuts down space so is even harder, but if you DO beat it there's
+    // green grass behind (a bigger breakaway). Better positioning helps the
+    // tackler; better decision-making helps the carrier pick the hole.
     const aggression = (this.tactics[tackler.side].defensiveAggression - 50) / 50;
+    const sys = this.tactics[tackler.side].defensiveSystem;
     const breakP = clamp(
       0.06 +
         (carrier.attr.strength - tackler.attr.tackling) / 65 +
         (carrier.attr.pace - 10) / 95 +
+        (carrier.attr.decisionMaking - 10) / 140 +
         pressure -
-        aggression * 0.04,
+        aggression * 0.04 -
+        (tackler.attr.positioning - 10) / 150 -
+        (sys === "blitz" ? 0.03 : 0),
       0.02,
       0.34
     );
     if (this.rng.chance(breakP)) {
       this.debug.breaks++;
       const dir = attackDir(carrier.side);
+      // beating a blitz springs you into the space behind the rushed-up line
+      if (sys === "blitz" && distToLine > 6) {
+        this.breakawayId = carrier.id;
+        this.breakawayTimer = 2.2;
+      }
       // right on the line, a beaten defender means he dives over for the try
       if (distToLine < 2.5) {
         this.debug.tryDive++;
@@ -908,11 +976,15 @@ export class Match {
     const defAgg = (this.tactics[def].defensiveAggression - 50) / 50;
     const attCommit = (this.tactics[att].ruckCommitment - 50) / 50;
 
-    // penalty? (aggressive jackal sides give away more at the breakdown) — kept
-    // low so the game isn't a penalty-goal shoot-out
-    if (this.rng.chance(clamp(0.012 + defAgg * 0.01, 0.004, 0.04))) {
-      // offending side: random, but more likely the defenders
-      const offender = this.rng.chance(0.6) ? def : att;
+    // penalty? Aggressive jackal sides give away more at the breakdown, and an
+    // ill-disciplined side (low discipline) concedes more. Kept low overall so
+    // the game isn't a penalty-goal shoot-out.
+    const indiscipline = (12 - this.avgAttr(def, "discipline")) / 60 + (12 - this.avgAttr(att, "discipline")) / 120;
+    if (this.rng.chance(clamp(0.012 + defAgg * 0.01 + indiscipline, 0.004, 0.05))) {
+      // the more ill-disciplined side is the more likely offender (usually the D)
+      const defLoose = 20 - this.avgAttr(def, "discipline");
+      const attLoose = 20 - this.avgAttr(att, "discipline");
+      const offender = this.rng.next() < (defLoose * 1.4) / (defLoose * 1.4 + attLoose) ? def : att;
       const winner = this.opp(offender);
       this.possession = winner;
       this.say(`Penalty to ${this.teamOf(winner).short}.`);

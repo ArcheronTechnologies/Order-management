@@ -26,6 +26,7 @@
               <option value="8">8×</option>
             </select>
           </label>
+          <button id="tacticsBtn">Tactics</button>
           <button id="playPause">Play</button>
           <button id="newMatch">New match</button>
         </div>
@@ -53,6 +54,37 @@
           <ul id="events"></ul>
         </aside>
       </main>
+    </div>
+
+    <div id="tacticsDrawer" class="drawer hidden">
+      <div class="drawer-panel">
+        <div class="drawer-head">
+          <h2>Tactics — <span id="tacticsTeam">Your club</span></h2>
+          <button id="tacticsClose" aria-label="Close">×</button>
+        </div>
+        <p class="drawer-hint">
+          Set up your attack &amp; defence. Changes apply live, from the next phase.
+          The opposition's coach sets up their own way.
+        </p>
+        <div class="tac-row">
+          <label for="presetSel">Preset</label>
+          <select id="presetSel"></select>
+        </div>
+        <div class="tac-group">
+          <h3>Attack — formation</h3>
+          <div id="formationBtns" class="btnrow"></div>
+          <p id="formationBlurb" class="blurb"></p>
+        </div>
+        <div class="tac-group">
+          <h3>Defence — system</h3>
+          <div id="systemBtns" class="btnrow"></div>
+          <p id="systemBlurb" class="blurb"></p>
+        </div>
+        <div class="tac-group">
+          <h3>Instructions</h3>
+          <div id="sliders"></div>
+        </div>
+      </div>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>

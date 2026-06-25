@@ -2,6 +2,8 @@ import "./style.css";
 import { Match } from "./engine/match";
 import { Renderer } from "./render/renderer";
 import { CLUBS } from "./data/clubs";
+import { PRESETS } from "./engine/tactics";
+import { createTacticsPanel } from "./ui/tactics-panel";
 import type { FormatId } from "./engine/formats";
 
 const $ = <T extends HTMLElement>(id: string): T => {
@@ -17,6 +19,7 @@ const formatSel = $("format") as HTMLSelectElement;
 const speedSel = $("speed") as HTMLSelectElement;
 const playBtn = $("playPause") as HTMLButtonElement;
 const newBtn = $("newMatch") as HTMLButtonElement;
+const tacticsBtn = $("tacticsBtn") as HTMLButtonElement;
 
 const homeNameEl = $("homeName");
 const awayNameEl = $("awayName");
@@ -31,6 +34,12 @@ let playing = false;
 let seed = 0x1a2b3c;
 let renderedCommentary = 0;
 
+// Your tactics — applied live to your club; persists across matches.
+const tacticsPanel = createTacticsPanel((t) => {
+  if (match) match.setTactics("home", t);
+});
+tacticsBtn.addEventListener("click", tacticsPanel.open);
+
 function pickTeams(s: number): [number, number] {
   const n = CLUBS.length;
   const a = (s >>> 0) % n; // unsigned — large seeds must stay in range
@@ -44,7 +53,13 @@ function newMatch() {
   const [hi, ai] = pickTeams(seed);
   const home = CLUBS[hi];
   const away = CLUBS[ai];
-  match = new Match(seed, formatSel.value as FormatId, home, away);
+  // your club plays your tactics; the AI opponent picks a preset
+  const aiTactics = PRESETS[seed % PRESETS.length].tactics;
+  match = new Match(seed, formatSel.value as FormatId, home, away, {
+    homeTactics: tacticsPanel.tactics(),
+    awayTactics: { ...aiTactics },
+  });
+  tacticsPanel.setTeamName(home.name);
   renderedCommentary = 0;
   eventsEl.innerHTML = "";
   homeNameEl.textContent = home.name;

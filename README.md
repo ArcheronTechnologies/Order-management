@@ -21,9 +21,15 @@ progress). The match is a watchable, self-contained game of rugby:
   named, positioned players (1–15 / sevens roles) and **FM-style 1–20
   attributes** — pace, strength, stamina, handling, tackling, kicking, decision
   making, positioning, discipline, plus set-piece scrummaging/lineout/throwing.
-- **Team tactics** that visibly change how a side plays: defensive line speed &
-  aggression (drift vs blitz), attacking width, kicking game, tempo, ruck
-  commitment, set-piece focus.
+- **Full FM-style tactics** you set in a dedicated screen (the **Tactics**
+  button): a selectable **attack formation** (1‑3‑3‑1 / 2‑4‑2 / 1‑3‑2‑2), a
+  **defensive system** (drift / blitz / umbrella), and seven instruction sliders
+  (line speed, breakdown aggression, width, kicking game, tempo, ruck commitment,
+  set‑piece focus), with presets. Your changes apply **live**; the AI opponent
+  sets up its own way. Every one of these visibly changes how the side plays.
+- All twelve player attributes now feed the match — including decision‑making
+  (option choice & handling errors), positioning (defensive read, cover & kick
+  fielding) and discipline (penalties conceded).
 - **Realistic shape & flow**, researched from real rugby: forward **pods** and a
   **backline at depth** in attack; a connected **defensive line** that fans from
   the breakdown with **pillars** at the ruck and a **backfield** (fullback +
