@@ -1,7 +1,7 @@
 import { Rng } from "./rng";
 import { UNION_POSITIONS, makePlayer, makeHidden } from "./teams";
 import type { Team } from "./teams";
-import type { Player } from "./types";
+import { ATTRIBUTE_KEYS, type Player } from "./types";
 
 export interface Prospect {
   player: Player;
@@ -49,4 +49,41 @@ export function generateYouthIntake(
     out.push({ player: p, stars: caStars(p.hidden.currentAbility), potential: caStars(p.hidden.potentialAbility) });
   }
   return out;
+}
+
+function clampAttr(v: number) {
+  return Math.max(1, Math.min(20, Math.round(v)));
+}
+function clamp100(v: number) {
+  return Math.max(1, Math.min(100, Math.round(v)));
+}
+
+/**
+ * Roll the U18/U20 holding squad forward a year. In a dedicated development
+ * environment youngsters grow toward their potential markedly faster than in
+ * the senior set-up. Anyone who turns 20 graduates out (ready for the seniors).
+ */
+export function developAcademy(prospects: Prospect[], rng: Rng): { stayed: Prospect[]; graduated: Prospect[] } {
+  const stayed: Prospect[] = [];
+  const graduated: Prospect[] = [];
+  for (const pr of prospects) {
+    const p = pr.player;
+    p.age += 1;
+    const gap = p.hidden.potentialAbility - p.hidden.currentAbility;
+    const proDet = (p.hidden.professionalism + p.hidden.determination) / 2; // 1–20
+    // accelerated academy growth toward the ceiling
+    const delta = gap * (0.3 + proDet * 0.025) + rng.range(-0.5, 2.5);
+    const before = p.hidden.currentAbility;
+    p.hidden.currentAbility = clamp100(before + delta);
+    if (before > 0 && Math.abs(p.hidden.currentAbility - before) >= 1) {
+      const ratio = p.hidden.currentAbility / before;
+      for (const k of ATTRIBUTE_KEYS) p.attr[k] = clampAttr(p.attr[k] * ratio);
+    }
+    p.lastDevDelta = p.hidden.currentAbility - before;
+    pr.stars = caStars(p.hidden.currentAbility);
+    pr.potential = caStars(p.hidden.potentialAbility);
+    if (p.age >= 20) graduated.push(pr);
+    else stayed.push(pr);
+  }
+  return { stayed, graduated };
 }

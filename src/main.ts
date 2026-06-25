@@ -13,7 +13,7 @@ import { computeFinances, formatKr, type FinanceBreakdown } from "./engine/finan
 import { pitchCondition, attendance as crowdAttendance, type MatchEnvironment, type SponsorBoard } from "./engine/matchday";
 import { generateOffers, settleSponsors, type SponsorOffer } from "./engine/sponsors";
 import { generateRecruitPool, signingFee, type Recruit } from "./engine/recruitment";
-import { generateYouthIntake, type Prospect } from "./engine/youth";
+import { generateYouthIntake, developAcademy, type Prospect } from "./engine/youth";
 import { pressQuestion, pressOutcome, postMatchQuestion, postMatchOutcome, playerSocial, PRESS_TONES, type PressTone, type MatchResult } from "./engine/media";
 import {
   generateBoard, boardConfidence, moodLabel, holdVote, lobby, moveAgainst, updateBoard,
@@ -464,11 +464,26 @@ $("recruitBack").addEventListener("click", () => renderSeason());
 
 // ---- youth academy ----
 let youthIntake: Prospect[] = [];
+let academy: Prospect[] = []; // the U18/U20 holding/development squad (persisted)
 function refreshYouth() {
   if (!season) return;
   const user = season.userClub;
   const rng = new Rng((seasonSeed * 9173 + season.year * 29) >>> 0);
   youthIntake = generateYouthIntake(rng, user, season.repOf(user), currentFacilities(user), !!user.university, compositeFacilities());
+}
+function prospectRow(pr: Prospect, i: number, action: string, label: string, full: boolean): string {
+  const p = pr.player;
+  const delta = pr.player.lastDevDelta ?? 0;
+  const deltaTag = delta >= 1 ? ` <span class="dev-up">▲${delta}</span>` : "";
+  const btn = full ? `<span class="muted">Squad full</span>` : `<button class="primary-inline ${action}" data-i="${i}">${label}</button>`;
+  return `<tr>
+    <td class="club">${p.position.short}</td>
+    <td class="club"><span class="full" style="color:var(--text)">${p.name}</span>${deltaTag}</td>
+    <td>${p.age}</td>
+    <td><span class="stars">${"★".repeat(pr.stars)}${"☆".repeat(5 - pr.stars)}</span></td>
+    <td><span class="stars pot">${"★".repeat(pr.potential)}${"☆".repeat(5 - pr.potential)}</span></td>
+    <td>${btn}</td>
+  </tr>`;
 }
 function renderYouth() {
   if (!season) return;
@@ -476,39 +491,71 @@ function renderYouth() {
   const roster = season.rosterFor(user);
   const cap = Math.max(50, squadSize(season.repOf(user)) + 4);
   $("youthSquad").textContent = `Squad ${roster.length}/${cap}`;
-  $("youthNote").textContent = `This year's academy graduates — raw but promising. A stronger club (reputation, facilities, a university link) brings through more, better youngsters. Promote them to the senior squad to develop them.`;
+  $("youthNote").textContent = `This year's academy graduates — raw but promising. Promote one straight to the seniors, or send them to the U18/U20 squad to develop faster for a year or two first.`;
   const full = roster.length >= cap;
   $("youthBody").innerHTML = youthIntake.length
     ? youthIntake
         .map((pr, i) => {
           const p = pr.player;
-          const btn = full ? `<span class="muted">Squad full</span>` : `<button class="primary-inline yp-promote" data-i="${i}">Promote</button>`;
+          const seniors = full ? `<span class="muted">Squad full</span>` : `<button class="primary-inline yp-promote" data-i="${i}">→ Seniors</button>`;
+          const dev = `<button class="yp-academy" data-i="${i}">→ U18/U20</button>`;
           return `<tr>
             <td class="club">${p.position.short}</td>
             <td class="club"><span class="full" style="color:var(--text)">${p.name}</span> <span class="tag">academy</span></td>
             <td>${p.age}</td>
             <td><span class="stars">${"★".repeat(pr.stars)}${"☆".repeat(5 - pr.stars)}</span></td>
             <td><span class="stars pot">${"★".repeat(pr.potential)}${"☆".repeat(5 - pr.potential)}</span></td>
-            <td>${btn}</td>
+            <td>${seniors} ${dev}</td>
           </tr>`;
         })
         .join("")
     : `<tr><td colspan="6" class="club"><span class="full muted">No graduates this year — invest in facilities & a university link to grow the academy.</span></td></tr>`;
+  $("academyNote").textContent = `Prospects develop faster here than in the senior set-up. They graduate automatically at 20 — promote them to the seniors whenever they're ready.`;
+  $("academyBody").innerHTML = academy.length
+    ? academy.map((pr, i) => prospectRow(pr, i, "ap-promote", "→ Seniors", full)).join("")
+    : `<tr><td colspan="6" class="club"><span class="full muted">No one in the development squad. Send a graduate down to bring them on faster.</span></td></tr>`;
   youthView.querySelectorAll<HTMLButtonElement>(".yp-promote").forEach((b) =>
     b.addEventListener("click", () => promoteYouth(Number(b.dataset.i))));
+  youthView.querySelectorAll<HTMLButtonElement>(".yp-academy").forEach((b) =>
+    b.addEventListener("click", () => sendToAcademy(Number(b.dataset.i))));
+  youthView.querySelectorAll<HTMLButtonElement>(".ap-promote").forEach((b) =>
+    b.addEventListener("click", () => promoteFromAcademy(Number(b.dataset.i))));
   showView("youth");
 }
-function promoteYouth(i: number) {
-  if (!season || i < 0 || i >= youthIntake.length) return;
+function promoteToSeniors(pr: Prospect): boolean {
+  if (!season) return false;
   const user = season.userClub;
   const roster = season.rosterFor(user);
   const cap = Math.max(50, squadSize(season.repOf(user)) + 4);
-  if (roster.length >= cap) return;
-  const pr = youthIntake[i];
+  if (roster.length >= cap) return false;
   pr.player.number = (roster.reduce((m, p) => Math.max(m, p.number), 0) || roster.length) + 1;
   roster.push(pr.player);
+  return true;
+}
+function promoteYouth(i: number) {
+  if (!season || i < 0 || i >= youthIntake.length) return;
+  const pr = youthIntake[i];
+  if (!promoteToSeniors(pr)) return;
   youthIntake.splice(i, 1);
   logNews(`🎓 Promoted academy graduate ${pr.player.position.short} ${pr.player.name} (potential ${"★".repeat(pr.potential)}).`);
+  save();
+  renderYouth();
+}
+function sendToAcademy(i: number) {
+  if (!season || i < 0 || i >= youthIntake.length) return;
+  const pr = youthIntake[i];
+  academy.push(pr);
+  youthIntake.splice(i, 1);
+  logNews(`🏫 ${pr.player.position.short} ${pr.player.name} joins the U18/U20 development squad.`);
+  save();
+  renderYouth();
+}
+function promoteFromAcademy(i: number) {
+  if (!season || i < 0 || i >= academy.length) return;
+  const pr = academy[i];
+  if (!promoteToSeniors(pr)) return;
+  academy.splice(i, 1);
+  logNews(`🎓 ${pr.player.position.short} ${pr.player.name} steps up from the U18/U20s to the seniors.`);
   save();
   renderYouth();
 }
@@ -1132,6 +1179,7 @@ function save() {
     seasonStartRep,
     recruits: recruitPool.map((r) => ({ p: serializePlayer(r.player), bg: r.background, st: r.stars, pot: r.potential })),
     youth: youthIntake.map((r) => ({ p: serializePlayer(r.player), st: r.stars, pot: r.potential })),
+    academy: academy.map((r) => ({ p: serializePlayer(r.player), st: r.stars, pot: r.potential })),
     news: news.slice(0, 120),
     managerName,
     careerHistory,
@@ -1204,6 +1252,9 @@ function load(): boolean {
     } else {
       refreshYouth();
     }
+    academy = Array.isArray(d.academy)
+      ? d.academy.map((r: any) => ({ player: deserializePlayer(r.p), stars: r.st, potential: r.pot }))
+      : [];
     news = Array.isArray(d.news) ? d.news : [];
     board = Array.isArray(d.board) && d.board.length ? d.board : generateBoard(new Rng((seasonSeed * 613 + 7) >>> 0));
     politicalActions = d.politicalActions ?? 2;
@@ -1291,6 +1342,7 @@ function startCareer(club: Team) {
   politicalActions = 2;
   investedThisSeason = false;
   oldBoys = [];
+  academy = [];
   refreshSponsors();
   refreshRecruits();
   refreshYouth();
@@ -1716,6 +1768,15 @@ function finalizeRollover() {
   gfResolved = false;
   nationalChamp = null;
   gfTie = null;
+  // the U18/U20 development squad ages & grows a year; anyone turning 20 graduates up
+  if (academy.length) {
+    const { stayed, graduated } = developAcademy(academy, new Rng((seasonSeed * 6151 + year * 37) >>> 0));
+    academy = stayed;
+    for (const pr of graduated) {
+      if (promoteToSeniors(pr)) logNews(`🎓 ${pr.player.position.short} ${pr.player.name} graduates the U18/U20s to the senior squad (potential ${"★".repeat(pr.potential)}).`);
+      else academy.push(pr); // no senior room yet — holds on another year
+    }
+  }
   refreshSponsors();
   refreshRecruits();
   refreshYouth();
