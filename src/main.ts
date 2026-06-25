@@ -10,6 +10,7 @@ import type { Team } from "./engine/teams";
 import { UNION_POSITIONS, setRole, serializePlayer, deserializePlayer, buildSquad } from "./engine/teams";
 import { SevensCup, sevensLineup, cupEntrants, ROUND_NAMES, type SevensTie } from "./engine/sevens";
 import { computeFinances, committeeMood, formatKr, facilityUpgradeCost, type FinanceBreakdown } from "./engine/finances";
+import { pitchCondition, attendance as crowdAttendance, type MatchEnvironment, type SponsorBoard } from "./engine/matchday";
 import { developSquad, type SeasonDevelopment } from "./engine/development";
 import {
   applyTraining,
@@ -108,6 +109,34 @@ let lastSnubs: Snub[] = []; // fringe players unhappy at being left out last mat
 let lastMom: PlayerRating | null = null; // man of the match (either side)
 let lastRatings: PlayerRating[] = []; // your XV's ratings last match
 let balance = 0; // the club bank balance (kr), carried across years
+let currentEnv: MatchEnvironment | undefined; // home club's match-day environment
+
+/** Build the match-day environment for the home club (pitch, stand, crowd, boards). */
+function buildEnvironment(home: Team, away: Team): MatchEnvironment {
+  const fac = currentFacilities(home);
+  const ground = home.ground ?? (fac >= 3 ? "owned" : "shared");
+  const rep = season ? season.repOf(home) : repState[home.short] ?? home.reputation;
+  // recent form lifts the gate — use the home club's win rate this season if known
+  let formBonus = 0;
+  if (season) {
+    const row = season.table().find((r) => r.team === home);
+    if (row && row.played > 0) formBonus = (row.won / row.played - 0.45) * 0.3;
+  }
+  const boards = season && home === season.userClub ? userSponsorBoards() : [];
+  return {
+    ground,
+    facilities: fac,
+    pitchCondition: pitchCondition(ground, fac),
+    attendance: crowdAttendance(rep, fac, formBonus),
+    homeColor: home.colors.primary,
+    awayColor: away.colors.primary,
+    boards,
+  };
+}
+/** Sponsor boards for the user's club (filled once the sponsorship system lands). */
+function userSponsorBoards(): SponsorBoard[] {
+  return [];
+}
 // the living pyramid: current tier & reputation per club short, for ALL 24 clubs,
 // evolving year on year (promotion/relegation move clubs between tiers).
 let tiers: Record<string, "allsvenskan" | "div1"> = {};
@@ -355,7 +384,7 @@ $("makeSubBtn").addEventListener("click", () => {
   if (match.substitute(userSide, offId, onId)) {
     flushCommentary();
     fillSubsSelects();
-    renderer.draw(match);
+    renderer.draw(match, currentEnv);
     if (match.subsUsed[userSide] >= match.maxSubs) closeSubs();
   }
 });
@@ -839,10 +868,11 @@ function startPlayoffMatch(tie: { a: Team; b: Team }) {
   subsBtn.classList.remove("hidden");
   backToSeasonBtn.classList.remove("hidden");
   backToSeasonBtn.textContent = "Playoff";
+  currentEnv = buildEnvironment(match!.home, match!.away);
   showView("match");
   syncScoreboard();
   renderer.resize();
-  renderer.draw(match);
+  renderer.draw(match, currentEnv);
   setPlaying(true);
 }
 
@@ -910,10 +940,11 @@ function startGrandFinal(nC: Team, sC: Team) {
   subsBtn.classList.remove("hidden");
   backToSeasonBtn.classList.remove("hidden");
   backToSeasonBtn.textContent = "Grand Final";
+  currentEnv = buildEnvironment(match!.home, match!.away);
   showView("match");
   syncScoreboard();
   renderer.resize();
-  renderer.draw(match);
+  renderer.draw(match, currentEnv);
   setPlaying(true);
 }
 
@@ -1055,10 +1086,11 @@ function startUserMatch(fixture: Fixture) {
   subsBtn.classList.remove("hidden");
   backToSeasonBtn.classList.remove("hidden");
   backToSeasonBtn.textContent = "‹ Season";
+  currentEnv = buildEnvironment(match!.home, match!.away);
   showView("match");
   syncScoreboard();
   renderer.resize();
-  renderer.draw(match);
+  renderer.draw(match, currentEnv);
   // a pre-match team talk sets the tone before kickoff
   showTeamTalk("pre").then(() => setPlaying(true));
 }
@@ -1239,10 +1271,11 @@ function startSevensMatch(tie: SevensTie) {
   subsBtn.classList.remove("hidden");
   backToSeasonBtn.classList.remove("hidden");
   backToSeasonBtn.textContent = "‹ Cup";
+  currentEnv = buildEnvironment(match!.home, match!.away);
   showView("match");
   syncScoreboard();
   renderer.resize();
-  renderer.draw(match);
+  renderer.draw(match, currentEnv);
   setPlaying(true);
 }
 
@@ -1408,7 +1441,7 @@ function loop(now: number) {
       showTeamTalk("half").then(() => setPlaying(true));
     }
   }
-  if (match) renderer.draw(match);
+  if (match) renderer.draw(match, currentEnv);
 }
 
 simBtn.addEventListener("click", () => {
@@ -1422,7 +1455,7 @@ simBtn.addEventListener("click", () => {
   syncScoreboard();
   flushCommentary();
   setPlaying(false);
-  renderer.draw(match);
+  renderer.draw(match, currentEnv);
 });
 
 playBtn.addEventListener("click", () => setPlaying(!playing));
@@ -1438,11 +1471,12 @@ newBtn.addEventListener("click", () => {
   });
   homeNameEl.textContent = a.name;
   awayNameEl.textContent = b.name;
+  currentEnv = buildEnvironment(a, b);
   renderedCommentary = 0;
   eventsEl.innerHTML = "";
   syncScoreboard();
   renderer.resize();
-  renderer.draw(match);
+  renderer.draw(match, currentEnv);
   setPlaying(true);
 });
 

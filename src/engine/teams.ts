@@ -17,6 +17,8 @@ export interface Team {
   facilities: number;
   /** in/near a university town — attracts strong overseas student players. */
   university?: boolean;
+  /** owns its ground outright, or rents a shared communal pitch (default: by facilities). */
+  ground?: "owned" | "shared";
   colors: { primary: string; secondary: string };
 }
 

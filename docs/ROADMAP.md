@@ -104,8 +104,16 @@ refactor everything else needs).
     contributions tracked in the engine and normalised against the field into
     4.5–10.0 ratings; the man of the match and your top performer are surfaced
     post-match, and a blinder lifts morale while a stinker dents it
-    (`ratings.ts`, `Match.contrib`). *Still to do:* follow-ball camera/zoom,
-    view modes.
+    (`ratings.ts`, `Match.contrib`).
+  - *Done (match-day environment):* the canvas now draws the home club's
+    surroundings — a **grandstand & crowd** along the top touchline (a built stand
+    for owned grounds, sized by facilities; just a rope & sparse spectators for a
+    shared communal ground), **pitch-side sponsor boards** along the bottom, and a
+    **pitch surface that reflects its condition** (lush & striped when well kept,
+    scruffy with muddy patches when worn — owned grounds you maintain can be
+    pristine, shared communal pitches stay scruffy). Crowd density scales with
+    reputation, facilities and form (`matchday.ts`, `render/renderer.ts`).
+    *Still to do:* follow-ball camera/zoom, view modes.
 - **M10 — Recruitment, retention & staff.** Local catchment, uni links, walk-ups,
   trials; scouting reports/shortlists; retention vs life-pull; volunteer staff.
 - **M11 — Club operations, finances & committee.** Costs vs income; semi-pro
