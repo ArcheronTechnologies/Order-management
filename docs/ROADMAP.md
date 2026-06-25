@@ -110,6 +110,15 @@ refactor everything else needs).
   trials; scouting reports/shortlists; retention vs life-pull; volunteer staff.
 - **M11 — Club operations, finances & committee.** Costs vs income; semi-pro
   budgets; committee confidence/objectives/job security; vision; facilities.
+  - *Done (finances):* a **club bank balance** carried across years, settled each
+    season. Income = membership fees (squad size) + reputation-driven sponsorship
+    (semi-pro multiplier at the top tier) + matchday gate; costs = facilities
+    upkeep + kit/insurance + **travel by real geography** (great-circle distance
+    between club cities — Umeå's away trips cost ~3× a Stockholm club's). A
+    Finances screen shows the breakdown, a season-end projection, and **committee
+    mood** (from balance + league position) (`finances.ts`, `data/geo.ts`).
+    *Still to do:* facility-upgrade spending, committee objectives/job security,
+    sponsors/fundraising depth.
 - **M12 — Youth & academy.** Annual intake (newgens), minis/juniors, schools links,
   U18/U20, development centres, feeder/affiliate clubs.
 - **M13 — Competitions & game world.** Full Swedish pyramid + promotion/relegation,

@@ -9,6 +9,7 @@ import { Rng } from "./engine/rng";
 import type { Team } from "./engine/teams";
 import { UNION_POSITIONS, setRole, serializePlayer, deserializePlayer, buildSquad } from "./engine/teams";
 import { SevensCup, sevensLineup, cupEntrants, ROUND_NAMES, type SevensTie } from "./engine/sevens";
+import { computeFinances, committeeMood, formatKr, type FinanceBreakdown } from "./engine/finances";
 import { developSquad, type SeasonDevelopment } from "./engine/development";
 import {
   applyTraining,
@@ -51,7 +52,8 @@ const seasonView = $("seasonView");
 const squadView = $("squadView");
 const selectView = $("selectView");
 const sevensView = $("sevensView");
-type ViewName = "career" | "season" | "match" | "squad" | "select" | "sevens";
+const financesView = $("financesView");
+type ViewName = "career" | "season" | "match" | "squad" | "select" | "sevens" | "finances";
 function showView(v: ViewName) {
   appView.classList.toggle("hidden", v !== "match");
   careerView.classList.toggle("hidden", v !== "career");
@@ -59,6 +61,7 @@ function showView(v: ViewName) {
   squadView.classList.toggle("hidden", v !== "squad");
   selectView.classList.toggle("hidden", v !== "select");
   sevensView.classList.toggle("hidden", v !== "sevens");
+  financesView.classList.toggle("hidden", v !== "finances");
 }
 
 // --- match view elements -------------------------------------------------
@@ -104,6 +107,7 @@ let lastHalf = 1; // to detect the half-time break for a talk
 let lastSnubs: Snub[] = []; // fringe players unhappy at being left out last match
 let lastMom: PlayerRating | null = null; // man of the match (either side)
 let lastRatings: PlayerRating[] = []; // your XV's ratings last match
+let balance = 0; // the club bank balance (kr), carried across years
 // the living pyramid: current tier & reputation per club short, for ALL 24 clubs,
 // evolving year on year (promotion/relegation move clubs between tiers).
 let tiers: Record<string, "allsvenskan" | "div1"> = {};
@@ -123,6 +127,44 @@ function divisionLabel(club: Team): string {
   const t = currentTier(club) === "allsvenskan" ? "Allsvenskan" : "Division 1";
   return `${t} ${club.region === "north" ? "North" : "South"}`;
 }
+
+// ---- club finances ----
+/** Project (or settle) the current season's finances for the user's club. */
+function currentSeasonFinances(): FinanceBreakdown | null {
+  if (!season) return null;
+  const user = season.userClub;
+  const userFixtures = season.fixtures.filter((f) => f.home === user || f.away === user);
+  const homeMatches = userFixtures.filter((f) => f.home === user).length;
+  const awayOpponents = userFixtures.filter((f) => f.away === user).map((f) => f.home);
+  return computeFinances(user, season.repOf(user), currentTier(user), homeMatches, awayOpponents);
+}
+
+function renderFinances() {
+  if (!season) return;
+  const fin = currentSeasonFinances()!;
+  $("financesClub").textContent = `${season.userClub.name} — finances`;
+  $("finBalance").innerHTML = `Bank balance: <strong class="${balance < 0 ? "neg" : "pos"}">${formatKr(balance)}</strong>`;
+  const pos = season.table().findIndex((r) => r.team === season!.userClub) + 1;
+  const mood = committeeMood(balance, pos || season.clubs.length, season.clubs.length);
+  $("finCommittee").innerHTML = `Committee: <strong>${mood.label}</strong> (${mood.score}/100)`;
+  const row = (label: string, v: number) => `<li><span>${label}</span><span>${formatKr(v)}</span></li>`;
+  $("finIncome").innerHTML =
+    row("Membership fees", fin.income.membership) +
+    row("Sponsorship", fin.income.sponsorship) +
+    row("Matchday (gate)", fin.income.matchday) +
+    `<li class="fin-tot"><span>Total income</span><span>${formatKr(fin.incomeTotal)}</span></li>`;
+  $("finCosts").innerHTML =
+    row("Facilities upkeep", fin.costs.upkeep) +
+    row("Kit & insurance", fin.costs.kit) +
+    row("Travel", fin.costs.travel) +
+    `<li class="fin-tot"><span>Total costs</span><span>${formatKr(fin.costTotal)}</span></li>`;
+  const projected = balance + fin.net;
+  $("finNote").innerHTML = `Projected at season end: <strong class="${fin.net < 0 ? "neg" : "pos"}">${fin.net >= 0 ? "+" : ""}${formatKr(fin.net)}</strong> → balance <strong>${formatKr(projected)}</strong>.` +
+    (fin.net < 0 ? " The club is running at a loss — the committee will want it addressed." : " The books are in good order.");
+  showView("finances");
+}
+$("financesBtn").addEventListener("click", renderFinances);
+$("financesBack").addEventListener("click", () => renderSeason());
 
 const tacticsPanel = createTacticsPanel((t) => {
   userTactics = t;
@@ -366,6 +408,7 @@ function save() {
     tiers,
     gfResolved,
     nationalChamp: nationalChamp?.short,
+    balance,
     tactics: userTactics,
     results: season.fixtures
       .filter((f) => f.played)
@@ -398,6 +441,7 @@ function load(): boolean {
     season.round = d.round;
     gfResolved = !!d.gfResolved;
     nationalChamp = d.nationalChamp ? CLUBS.find((c) => c.short === d.nationalChamp) ?? null : null;
+    balance = d.balance ?? (currentTier(user) === "allsvenskan" ? 90000 : 45000);
     userTactics = d.tactics ?? { ...PRESETS[0].tactics };
     trainingPlan = d.training ?? { ...DEFAULT_TRAINING };
     for (const r of d.results ?? []) {
@@ -455,6 +499,8 @@ function renderClubPicker() {
 function startCareer(club: Team) {
   seasonSeed = (Date.now() & 0xffffff) || 1;
   resetWorld();
+  // a modest float to start: semi-pro top tier carries more cash than the amateurs
+  balance = currentTier(club) === "allsvenskan" ? 90000 : 45000;
   season = new Season(divisionFor(club), club, seasonSeed, { reputation: repState });
   userTactics = { ...PRESETS[0].tactics };
   trainingPlan = { ...DEFAULT_TRAINING };
@@ -687,6 +733,8 @@ function setTier(club: Team, tier: "allsvenskan" | "div1") {
 /** End the league season: resolve promotion/relegation across the pyramid. */
 function startNextSeason() {
   if (!season) return;
+  // settle the books for the season just finished
+  balance += currentSeasonFinances()?.net ?? 0;
   season.endSeasonReputation();
   Object.assign(repState, season.reputationState());
   pendingRolloverYear = season.year + 1;

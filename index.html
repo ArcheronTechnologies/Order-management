@@ -79,6 +79,7 @@
         <div class="controls">
           <span id="seasonRound" class="round-pill"></span>
           <button id="squadBtn">Squad</button>
+          <button id="financesBtn">Finances</button>
           <button id="sevensBtn">Sevens Cup</button>
           <button id="openTacticsFromSeason">Tactics</button>
           <button id="newCareer">New career</button>
@@ -130,6 +131,30 @@
           <h2 class="unavail-h">Unavailable</h2>
           <ul id="unavailList" class="avail-list out"></ul>
         </section>
+      </div>
+    </div>
+
+    <div id="financesView" class="view hidden">
+      <header class="topbar">
+        <h1>Fly-Half <span class="sub" id="financesClub">club finances</span></h1>
+        <div class="controls">
+          <button id="financesBack">‹ Season</button>
+        </div>
+      </header>
+      <div class="finances-panel">
+        <div class="fin-balance" id="finBalance"></div>
+        <div class="fin-committee" id="finCommittee"></div>
+        <div class="fin-grid">
+          <div class="fin-col">
+            <h3>Income (this season)</h3>
+            <ul id="finIncome"></ul>
+          </div>
+          <div class="fin-col">
+            <h3>Costs (this season)</h3>
+            <ul id="finCosts"></ul>
+          </div>
+        </div>
+        <p class="fin-note" id="finNote"></p>
       </div>
     </div>
 
