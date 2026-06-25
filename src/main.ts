@@ -14,7 +14,7 @@ import { pitchCondition, attendance as crowdAttendance, type MatchEnvironment, t
 import { generateOffers, settleSponsors, type SponsorOffer } from "./engine/sponsors";
 import { generateRecruitPool, signingFee, type Recruit } from "./engine/recruitment";
 import { generateYouthIntake, type Prospect } from "./engine/youth";
-import { pressQuestion, pressOutcome, PRESS_TONES, type PressTone } from "./engine/media";
+import { pressQuestion, pressOutcome, postMatchQuestion, postMatchOutcome, rumour, PRESS_TONES, type PressTone, type MatchResult } from "./engine/media";
 import {
   generateBoard, boardConfidence, moodLabel, holdVote, lobby, moveAgainst, updateBoard,
   type BoardMember, type CapitalProposal,
@@ -831,6 +831,47 @@ function showPressConference(opp: Team): Promise<void> {
   });
 }
 
+/** A result-aware post-match interview, reusing the presser overlay. */
+function showPostMatchInterview(): Promise<void> {
+  return new Promise((resolve) => {
+    if (!season || !match) return resolve();
+    const myScore = match.score[userSide];
+    const oppScore = match.score[userSide === "home" ? "away" : "home"];
+    const result: MatchResult = myScore > oppScore ? "won" : myScore < oppScore ? "lost" : "drew";
+    $("pressContext").textContent =
+      result === "won" ? `Full time · won ${myScore}–${oppScore}`
+        : result === "lost" ? `Full time · lost ${myScore}–${oppScore}`
+          : `Full time · drew ${myScore}–${oppScore}`;
+    $("pressQuestion").textContent = postMatchQuestion(result, new Rng((seasonSeed * 71 + season.round * 13 + myScore) >>> 0));
+    pressTonesEl.innerHTML = "";
+    const finish = (tone: PressTone | null) => {
+      if (tone) {
+        const o = postMatchOutcome(tone, result);
+        for (const p of season!.rosterFor(season!.userClub)) p.condition.morale = Math.max(0, Math.min(100, p.condition.morale + o.morale));
+        for (const m of board) m.approval = Math.max(0, Math.min(100, m.approval + o.board));
+        repState[season!.userClub.short] = Math.max(15, Math.min(100, (repState[season!.userClub.short] ?? season!.userClub.reputation) + o.rep));
+        season!.reputation.set(season!.userClub, repState[season!.userClub.short]);
+        logNews(`🎙️ Post-match: ${o.line}`);
+      }
+      pressOverlay.classList.add("hidden");
+      resolve();
+    };
+    for (const t of PRESS_TONES) {
+      const btn = document.createElement("button");
+      btn.className = "talk-tone";
+      btn.innerHTML = `<span class="tone-label">${t.label}</span>`;
+      btn.addEventListener("click", () => finish(t.tone));
+      pressTonesEl.appendChild(btn);
+    }
+    const skip = document.createElement("button");
+    skip.className = "talk-tone";
+    skip.innerHTML = `<span class="tone-label">No comment</span><span class="tone-blurb">Keep it brief.</span>`;
+    skip.addEventListener("click", () => finish(null));
+    pressTonesEl.appendChild(skip);
+    pressOverlay.classList.remove("hidden");
+  });
+}
+
 // ====================== substitutions (live) =============================
 const subsOverlay = $("subsOverlay");
 const subOff = $("subOff") as HTMLSelectElement;
@@ -1574,6 +1615,10 @@ function finalizeRollover() {
   refreshRecruits();
   refreshYouth();
   logNews(`📅 Year ${season.year}: ${divisionLabel(season.userClub)} season begins. Board confidence ${boardConfidence(board)}/100.`);
+  // a bit of pre-season grapevine chatter
+  const rumRng = new Rng((seasonSeed * 149 + year * 23) >>> 0);
+  const rr = rumour(season.userClub.name, rumRng);
+  logNews(`📰 ${rr.text}`);
   save();
   renderSeason();
 }
@@ -1801,6 +1846,7 @@ function finishUserMatch() {
     new Rng((availSeed * 19 + season.round * 3) >>> 0)
   );
   simRestOfRound(currentFixture);
+  maybeRumour();
   season.round++;
   currentFixture = null;
   backToSeasonBtn.classList.add("hidden");
@@ -1808,6 +1854,21 @@ function finishUserMatch() {
   simBtn.classList.add("hidden");
   subsBtn.classList.add("hidden");
   renderSeason();
+}
+
+/** Drop the occasional 📰 flavour item into the inbox (about every other round). */
+function maybeRumour() {
+  if (!season) return;
+  const rng = new Rng((seasonSeed * 131 + season.round * 17 + 5) >>> 0);
+  if (rng.next() > 0.5) return; // not every round
+  // mostly about a rival; sometimes about your own club
+  const pool = season.clubs.filter((c) => c !== season!.userClub);
+  const club = rng.next() < 0.4 || pool.length === 0 ? season.userClub : pool[Math.floor(rng.next() * pool.length)];
+  const r = rumour(club.name, rng);
+  logNews(`📰 ${r.text}`);
+  if (r.morale !== 0 && club === season.userClub) {
+    for (const p of season.rosterFor(season.userClub)) p.condition.morale = Math.max(0, Math.min(100, p.condition.morale + r.morale));
+  }
 }
 
 function simRestOfRound(skip: Fixture | null) {
@@ -1997,7 +2058,7 @@ backToSeasonBtn.addEventListener("click", () => {
     return;
   }
   if (match && match.finished) {
-    showTeamTalk("full").then(() => finishUserMatch());
+    showTeamTalk("full").then(() => showPostMatchInterview()).then(() => finishUserMatch());
   } else if (confirm("Leave this match? It will be quick-simmed instead.")) {
     // abandon → quick-sim the user's match too
     if (season && currentFixture) {
