@@ -80,6 +80,8 @@ export interface Player {
   lastDevDelta?: number;
   /** seasons served at the current club — drives "old boy" loyalty on retirement. */
   seasonsAtClub?: number;
+  /** an FM-style role/duty for this player (e.g. "Playmaker", "Fetcher"); position-specific. */
+  duty?: string;
   position: PositionDef;
   forward: boolean;
   attr: Attributes;

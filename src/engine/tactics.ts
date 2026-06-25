@@ -35,7 +35,39 @@ export interface TeamTactics {
   scrumCall?: "steady" | "quick" | "pushover";
   /** kickoff/restart: a long safe kick, or contest it and try to win it back. */
   kickoffCall?: "long" | "contest";
+
+  /** an instruction aimed at the opponent (read by the defending side). */
+  oppositionPlan?: "none" | "rushPlaymaker" | "narrowChannels" | "contestKicks" | "targetSetPiece";
 }
+
+/** Position-specific player duties (the first, "Balanced", is the default). */
+export const DUTIES_BY_POSITION: Record<string, string[]> = {
+  LHP: ["Balanced", "Enforcer"],
+  HK: ["Balanced", "Enforcer"],
+  THP: ["Balanced", "Enforcer"],
+  LK: ["Balanced", "Enforcer", "Lineout target"],
+  BSF: ["Balanced", "Workhorse", "Ball-carrier"],
+  OSF: ["Balanced", "Fetcher", "Workhorse"],
+  N8: ["Balanced", "Ball-carrier", "Link"],
+  SH: ["Balanced", "Box-kicker", "Sniper"],
+  FH: ["Balanced", "Playmaker", "Running 10"],
+  IC: ["Balanced", "Crash-ball", "Distributor"],
+  OC: ["Balanced", "Distributor", "Strike runner"],
+  LW: ["Balanced", "Finisher", "Counter-attacker"],
+  RW: ["Balanced", "Finisher", "Counter-attacker"],
+  FB: ["Balanced", "Counter-attacker", "Sweeper"],
+};
+export function dutiesFor(positionShort: string): string[] {
+  return DUTIES_BY_POSITION[positionShort] ?? ["Balanced"];
+}
+
+export const OPPOSITION_PLANS: { v: NonNullable<TeamTactics["oppositionPlan"]>; label: string; blurb: string }[] = [
+  { v: "none", label: "None", blurb: "No special focus on the opposition." },
+  { v: "rushPlaymaker", label: "Rush their 10", blurb: "Fly up on their fly-half — force errors, but leave space." },
+  { v: "narrowChannels", label: "Shut the channels", blurb: "Stay narrow, deny midfield space — concede the edges." },
+  { v: "contestKicks", label: "Contest kicks", blurb: "Press their kicking game and chase hard." },
+  { v: "targetSetPiece", label: "Target set piece", blurb: "Throw everything at disrupting their lineout & scrum." },
+];
 
 export const DEFAULT_TACTICS: TeamTactics = {
   attackFormation: "1-3-3-1",
@@ -50,6 +82,7 @@ export const DEFAULT_TACTICS: TeamTactics = {
   lineoutThrow: "full",
   scrumCall: "steady",
   kickoffCall: "long",
+  oppositionPlan: "none",
 };
 
 export const LINEOUT_CALLS: { v: NonNullable<TeamTactics["lineoutThrow"]>; label: string; blurb: string }[] = [

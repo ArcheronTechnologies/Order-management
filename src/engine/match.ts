@@ -257,11 +257,11 @@ export class Match {
 
   /** chance a pass from this player goes forward / loose — handling + nous. */
   private handlingErrorP(p: Player): number {
-    return clamp(
-      0.05 + (12 - p.attr.handling) * 0.006 - (p.attr.decisionMaking - 10) * 0.004,
-      0.015,
-      0.13
-    );
+    let e = 0.05 + (12 - p.attr.handling) * 0.006 - (p.attr.decisionMaking - 10) * 0.004;
+    if (p.duty === "Playmaker") e -= 0.022; // a playmaker takes care of the ball
+    // an opponent rushing the playmaker forces errors from a fly-half
+    if (p.position.short === "FH" && this.tactics[this.opp(p.side)].oppositionPlan === "rushPlaymaker") e += 0.05;
+    return clamp(e, 0.012, 0.16);
   }
 
   /** credit a player with a contribution toward their match rating. */
@@ -517,6 +517,15 @@ export class Match {
       // contestable: whoever is closest gathers; possession follows them
       this.possession = best.side;
       this.phaseCount = 0;
+      // a side that set out to contest kicks puts the catcher under real pressure
+      if (
+        this.tactics[this.opp(best.side)].oppositionPlan === "contestKicks" &&
+        this.rng.chance(0.13 + (12 - best.attr.handling) * 0.01)
+      ) {
+        this.say(`Contested in the air — ${best.name} can't gather!`);
+        this.startScrum(this.opp(best.side), best.x, best.y);
+        return;
+      }
     } else {
       // a pass: knock-on / interception checks
       if (best.side !== this.possession) {
@@ -890,7 +899,12 @@ export class Match {
     // tight carry (pick/pod) runs straighter at the man in front.
     const ahead = this.side(def).filter((p) => (p.x - carrier.x) * dir > -3);
     const os = this.openSign;
-    const w = lerpSlider(this.tactics[carrier.side].attackingWidth, 5, 9);
+    let w = lerpSlider(this.tactics[carrier.side].attackingWidth, 5, 9);
+    // the defence can shut the midfield channels and concede the edges only grudgingly
+    if (this.tactics[def].oppositionPlan === "narrowChannels") w *= 0.72;
+    // a crash-ball runner takes it up tight; a distributor looks wider for the gap
+    if (carrier.duty === "Crash-ball") w *= 0.6;
+    else if (carrier.duty === "Distributor") w *= 1.25;
     const offsets = this.play === "wide" ? [0, os * w * 0.6, os * w] : [-w * 0.5, 0, w * 0.5];
     let bestY = carrier.y;
     let bestGap = -1;
@@ -1027,12 +1041,14 @@ export class Match {
     // tackler; better decision-making helps the carrier pick the hole.
     const aggression = (this.tactics[tackler.side].defensiveAggression - 50) / 50;
     const sys = this.tactics[tackler.side].defensiveSystem;
+    // a ball-carrier / crash-ball runner is harder to put down in contact
+    const dutyBreak = carrier.duty === "Ball-carrier" || carrier.duty === "Crash-ball" ? 0.05 : 0;
     const breakP = clamp(
       0.06 +
         (carrier.attr.strength - tackler.attr.tackling) / 65 +
         (carrier.attr.pace - 10) / 95 +
         (carrier.attr.decisionMaking - 10) / 140 +
-        pressure -
+        pressure + dutyBreak -
         aggression * 0.04 -
         (tackler.attr.positioning - 10) / 150 -
         (sys === "blitz" ? 0.03 : 0) +
@@ -1150,10 +1166,12 @@ export class Match {
     // turnover chance grows as a side hangs onto the ball over many phases;
     // committing more to rucks lowers it, an aggressive jackal raises it.
     // Amateur rugby is error-strewn, so the breakdown is a real lottery.
+    // a specialist fetcher (openside) on the defending side pinches more ball
+    const fetcher = this.side(def).some((p) => p.duty === "Fetcher") ? 0.04 : 0;
     const turnoverP = clamp(
-      0.06 + (this.phaseCount - 4) * 0.012 + defAgg * 0.03 - attCommit * 0.03,
+      0.06 + (this.phaseCount - 4) * 0.012 + defAgg * 0.03 - attCommit * 0.03 + fetcher,
       0.03,
-      0.26
+      0.3
     );
     if (this.rng.chance(turnoverP)) {
       this.turnover(this.ball.x, this.ball.y);
@@ -1274,7 +1292,9 @@ export class Match {
     const sp = this.setPiece!;
     const putIn = sp.putIn;
     const def = this.opp(putIn);
-    const edge = this.packPower(putIn, "scrummaging") - this.packPower(def, "scrummaging");
+    let edge = this.packPower(putIn, "scrummaging") - this.packPower(def, "scrummaging");
+    // the defending side can throw everything at disrupting the set piece
+    if (this.tactics[def].oppositionPlan === "targetSetPiece") edge -= 9;
     const call = this.tactics[putIn].scrumCall ?? "steady";
     // put-in side strongly favoured; a dominant pack can win against the head.
     // a pushover or quick channel-ball is a touch looser than steady ball.
@@ -1318,7 +1338,8 @@ export class Match {
       this.packPower(throwIn, "lineoutJump") - this.packPower(def, "lineoutJump") +
       (this.hookerThrow(throwIn) - 10) * 0.5 +
       (leaderOn ? 4 : 0) +
-      (shortLine ? 8 : 0); // fewer jumpers to contest — much safer ball
+      (shortLine ? 8 : 0) + // fewer jumpers to contest — much safer ball
+      (this.tactics[def].oppositionPlan === "targetSetPiece" ? -9 : 0); // foe targeting the set piece
     const winP = clamp(0.82 + edge / 70, 0.5, 0.96);
     let winner = throwIn;
     if (!this.rng.chance(winP)) {

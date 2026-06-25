@@ -429,6 +429,7 @@ export function serializePlayer(p: Player): unknown {
   return {
     id: p.id, number: p.number, name: p.name, age: p.age, nationality: p.nationality,
     studentYearsLeft: p.studentYearsLeft, lastDevDelta: p.lastDevDelta, seasonsAtClub: p.seasonsAtClub,
+    duty: p.duty,
     pos: p.position.number, attr: p.attr, hidden: p.hidden, person: p.person,
     condition: p.condition,
     isCaptain: p.isCaptain, isGoalKicker: p.isGoalKicker, isLineoutLeader: p.isLineoutLeader,
@@ -442,7 +443,7 @@ export function deserializePlayer(o: any): Player {
   return {
     id: o.id, side: "home", number: o.number, name: o.name, age: o.age,
     nationality: o.nationality, studentYearsLeft: o.studentYearsLeft, lastDevDelta: o.lastDevDelta,
-    seasonsAtClub: o.seasonsAtClub,
+    seasonsAtClub: o.seasonsAtClub, duty: o.duty,
     position: pos, forward: pos.forward, attr: o.attr, hidden: o.hidden, person: o.person,
     condition: o.condition,
     isCaptain: o.isCaptain, isGoalKicker: o.isGoalKicker, isLineoutLeader: o.isLineoutLeader,

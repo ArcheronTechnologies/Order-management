@@ -8,6 +8,7 @@ import {
   LINEOUT_CALLS,
   SCRUM_CALLS,
   KICKOFF_CALLS,
+  OPPOSITION_PLANS,
   type TeamTactics,
   type AttackFormation,
   type DefensiveSystem,
@@ -151,7 +152,29 @@ export function createTacticsPanel(onChange: (t: TeamTactics) => void): TacticsP
     setPieceEl.appendChild(wrap);
   }
 
+  // --- opposition plan ---
+  const oppEl = $("oppositionPlan");
+  const oppBlurb = $("oppositionBlurb");
+  OPPOSITION_PLANS.forEach((o) => {
+    const b = document.createElement("button");
+    b.textContent = o.label;
+    b.dataset.opp = o.v;
+    b.title = o.blurb;
+    b.addEventListener("click", () => {
+      state.oppositionPlan = o.v;
+      presetSel.value = "";
+      render();
+      emit();
+    });
+    oppEl.appendChild(b);
+  });
+
   function render() {
+    const oppCur = state.oppositionPlan ?? "none";
+    oppEl.querySelectorAll<HTMLButtonElement>("button").forEach((b) => {
+      b.classList.toggle("active", (b.dataset.opp ?? "") === oppCur);
+    });
+    oppBlurb.textContent = OPPOSITION_PLANS.find((o) => o.v === oppCur)?.blurb ?? "";
     setPieceEl.querySelectorAll<HTMLButtonElement>("button").forEach((b) => {
       const [key, v] = (b.dataset.call ?? "").split(":");
       b.classList.toggle("active", (state[key as keyof TeamTactics] ?? "") === v);

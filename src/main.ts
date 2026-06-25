@@ -2,7 +2,7 @@ import "./style.css";
 import { Match } from "./engine/match";
 import { Renderer } from "./render/renderer";
 import { CLUBS } from "./data/clubs";
-import { PRESETS, type TeamTactics } from "./engine/tactics";
+import { PRESETS, dutiesFor, type TeamTactics } from "./engine/tactics";
 import { Season, quickSim, simStandings, type Fixture } from "./engine/season";
 import { FORMATS } from "./engine/formats";
 import { Rng } from "./engine/rng";
@@ -902,6 +902,15 @@ function fillRoleSelect(sel: HTMLSelectElement, roster: Player[], flag: keyof Pl
     .join("");
 }
 
+function dutySelect(p: Player): string {
+  const opts = dutiesFor(p.position.short);
+  const cur = p.duty && opts.includes(p.duty) ? p.duty : opts[0];
+  if (opts.length <= 1) return `<span class="full" style="color:var(--muted)">${cur}</span>`;
+  return `<select class="duty-select" data-pid="${p.id}">${opts
+    .map((d) => `<option value="${d}"${d === cur ? " selected" : ""}>${d}</option>`)
+    .join("")}</select>`;
+}
+
 function renderSquad() {
   if (!season) return;
   const live = season.rosterFor(season.userClub);
@@ -921,6 +930,7 @@ function renderSquad() {
         <td>${p.age}</td>
         <td>${a.strength}</td><td>${a.pace}</td><td>${a.handling}</td><td>${a.tackling}</td><td>${a.kicking}</td>
         <td>${p.hidden.currentAbility}</td><td>${p.hidden.potentialAbility}</td>
+        <td class="club">${dutySelect(p)}</td>
         <td class="club"><span class="full" style="color:var(--muted)">${p.person.personality}</span></td>
         <td class="club"><span class="full" style="color:var(--muted)">${p.person.job}</span></td>
       </tr>`;
@@ -938,6 +948,15 @@ function onRoleChange(sel: HTMLSelectElement, role: "isCaptain" | "isGoalKicker"
   save();
   renderSquad();
 }
+squadBody.addEventListener("change", (e) => {
+  const sel = e.target as HTMLElement;
+  if (!season || !sel.classList?.contains("duty-select")) return;
+  const pid = Number((sel as HTMLSelectElement).dataset.pid);
+  const player = season.rosterFor(season.userClub).find((p) => p.id === pid);
+  if (!player) return;
+  player.duty = (sel as HTMLSelectElement).value;
+  save();
+});
 roleCaptain.addEventListener("change", () => onRoleChange(roleCaptain, "isCaptain"));
 roleKicker.addEventListener("change", () => onRoleChange(roleKicker, "isGoalKicker"));
 roleLineout.addEventListener("change", () => onRoleChange(roleLineout, "isLineoutLeader"));
