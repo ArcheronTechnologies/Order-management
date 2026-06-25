@@ -18,11 +18,13 @@ const $ = <T extends HTMLElement>(id: string): T => {
 const appView = $("app");
 const careerView = $("careerSetup");
 const seasonView = $("seasonView");
-type ViewName = "career" | "season" | "match";
+const squadView = $("squadView");
+type ViewName = "career" | "season" | "match" | "squad";
 function showView(v: ViewName) {
   appView.classList.toggle("hidden", v !== "match");
   careerView.classList.toggle("hidden", v !== "career");
   seasonView.classList.toggle("hidden", v !== "season");
+  squadView.classList.toggle("hidden", v !== "squad");
 }
 
 // --- match view elements -------------------------------------------------
@@ -67,6 +69,33 @@ const tacticsPanel = createTacticsPanel((t) => {
 });
 tacticsBtn.addEventListener("click", tacticsPanel.open);
 $("openTacticsFromSeason").addEventListener("click", tacticsPanel.open);
+
+const squadBody = $("squadBody");
+const squadClub = $("squadClub");
+function renderSquad() {
+  if (!season) return;
+  squadClub.textContent = season.userClub.name;
+  const roster = [...season.rosterFor(season.userClub)].sort(
+    (a, b) => a.position.number - b.position.number
+  );
+  squadBody.innerHTML = roster
+    .map((p) => {
+      const a = p.attr;
+      return `<tr>
+        <td class="club">${p.position.short}</td>
+        <td class="club"><span class="full" style="color:var(--text)">${p.name}</span></td>
+        <td>${p.age}</td>
+        <td>${a.strength}</td><td>${a.pace}</td><td>${a.handling}</td><td>${a.tackling}</td><td>${a.kicking}</td>
+        <td>${p.hidden.currentAbility}</td><td>${p.hidden.potentialAbility}</td>
+        <td class="club"><span class="full" style="color:var(--muted)">${p.person.personality}</span></td>
+        <td class="club"><span class="full" style="color:var(--muted)">${p.person.job}</span></td>
+      </tr>`;
+    })
+    .join("");
+  showView("squad");
+}
+$("squadBtn").addEventListener("click", renderSquad);
+$("squadBack").addEventListener("click", () => renderSeason());
 
 // ====================== persistence ======================================
 const SAVE_KEY = "flyhalf.career.v1";
@@ -230,6 +259,8 @@ function startUserMatch(fixture: Fixture) {
   match = new Match(seed, "union", home, away, {
     homeTactics: userIsHome ? userTactics : { ...aiTactics },
     awayTactics: userIsHome ? { ...aiTactics } : userTactics,
+    homeSquad: season!.rosterFor(home),
+    awaySquad: season!.rosterFor(away),
   });
   tacticsPanel.setTeamName(season!.userClub.name);
   renderedCommentary = 0;

@@ -34,9 +34,38 @@ export interface PositionDef {
   weights: Partial<Record<keyof Attributes, number>>;
 }
 
+/** Hidden, FM-style attributes — not shown raw; drive development & big moments. */
+export interface HiddenAttributes {
+  currentAbility: number; // 1–100, overall now
+  potentialAbility: number; // 1–100, ceiling
+  determination: number; // 1–20
+  professionalism: number; // 1–20, training gains & condition upkeep
+  consistency: number; // 1–20, how often they hit their level
+  bigMatch: number; // 1–20, temperament in big games
+}
+
+/** The amateur/person side: a life outside rugby that shapes availability. */
+export interface PersonProfile {
+  job: string;
+  commitment: number; // 1–20, turns up to train & play
+  workFlexibility: number; // 1–20, can get time off for matches/travel
+  injuryProneness: number; // 1–20
+  personality: string; // derived label (e.g. "Model professional")
+  traits: string[]; // playing traits (e.g. "Offloads in the tackle")
+  canPlay: string[]; // position shorts this player can cover
+}
+
+/** Match-to-match physical/morale condition (fuller model used from M5). */
+export interface Condition {
+  fitness: number; // 0–100 match fitness
+  sharpness: number; // 0–100 match sharpness
+  morale: number; // 0–100
+  injuredWeeks: number; // 0 = available
+}
+
 export interface Player {
   id: number;
-  side: Side;
+  side: Side; // assigned per match
   /** shirt number; matches the starting position for on-field starters. */
   number: number;
   name: string;
@@ -44,6 +73,9 @@ export interface Player {
   position: PositionDef;
   forward: boolean;
   attr: Attributes;
+  hidden: HiddenAttributes;
+  person: PersonProfile;
+  condition: Condition;
   /** true while on the pitch (false on the bench). */
   onField: boolean;
 

@@ -1,5 +1,7 @@
-import type { Team } from "./teams";
+import { buildSquad, type Team } from "./teams";
+import { FORMATS } from "./formats";
 import { Rng } from "./rng";
+import type { Player } from "./types";
 
 export interface Fixture {
   round: number;
@@ -77,6 +79,8 @@ export class Season {
   readonly userClub: Team;
   readonly fixtures: Fixture[];
   readonly totalRounds: number;
+  /** persistent squad per club, generated once (deterministic from the seed). */
+  readonly rosters = new Map<Team, Player[]>();
   round = 1; // next round to play
 
   constructor(clubs: Team[], userClub: Team, seed: number) {
@@ -84,6 +88,13 @@ export class Season {
     this.userClub = userClub;
     this.fixtures = buildFixtures(clubs, new Rng(seed));
     this.totalRounds = Math.max(...this.fixtures.map((f) => f.round));
+    clubs.forEach((c, i) => {
+      this.rosters.set(c, buildSquad(new Rng((seed * 1000 + i * 97 + 13) >>> 0), c, "home", FORMATS.union));
+    });
+  }
+
+  rosterFor(team: Team): Player[] {
+    return this.rosters.get(team)!;
   }
 
   roundFixtures(r: number): Fixture[] {

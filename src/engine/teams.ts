@@ -1,4 +1,4 @@
-import type { Attributes, PositionDef, Player, Side } from "./types";
+import type { Attributes, HiddenAttributes, PersonProfile, PositionDef, Player, Side } from "./types";
 import { ATTRIBUTE_KEYS } from "./types";
 import type { FormatConfig } from "./formats";
 import { Rng } from "./rng";
@@ -94,6 +94,75 @@ function makeAttributes(rng: Rng, rating: number, pos: PositionDef): Attributes 
 
 let nextId = 1;
 
+// amateur day jobs — the life outside rugby that shapes availability
+const JOBS = [
+  "Carpenter", "Teacher", "Student", "Electrician", "Nurse", "IT consultant",
+  "Forestry worker", "Police officer", "Chef", "Plumber", "Accountant", "Farmer",
+  "Lorry driver", "Engineer", "Bartender", "PE teacher", "Mechanic", "Paramedic",
+  "Warehouse worker", "Fisherman", "Soldier", "Personal trainer", "Salesman",
+];
+
+const FWD_TRAITS = ["Big hitter", "Ball-carrying forward", "Hits rucks hard", "Dominant scrummager", "Lineout target", "Mauls well"];
+const BACK_TRAITS = ["Goose-steps", "Offloads in the tackle", "Sidesteps", "Box-kicks", "Places kicks well", "Steps off both feet", "Tries to beat the first man"];
+
+function personalityLabel(det: number, prof: number, commit: number): string {
+  const s = det + prof + commit;
+  if (prof >= 16 && det >= 15) return "Model professional";
+  if (s >= 48) return "Driven";
+  if (commit <= 7) return "Unreliable";
+  if (prof <= 8) return "Casual";
+  if (det >= 15) return "Determined";
+  if (s <= 24) return "Easy-going";
+  return "Balanced";
+}
+
+function makeHidden(rng: Rng, attr: Attributes, age: number): HiddenAttributes {
+  const avg = Object.values(attr).reduce((a, b) => a + b, 0) / Object.keys(attr).length;
+  const currentAbility = clampAttr100(Math.round(avg * 4.5 + rng.range(-6, 6)));
+  // younger players have more headroom to grow
+  const youth = Math.max(0, 30 - age);
+  const potentialAbility = clampAttr100(currentAbility + Math.round(youth * rng.range(0.4, 1.4)));
+  return {
+    currentAbility,
+    potentialAbility,
+    determination: rngAttr(rng),
+    professionalism: rngAttr(rng),
+    consistency: rngAttr(rng),
+    bigMatch: rngAttr(rng),
+  };
+}
+
+function clampAttr100(v: number): number {
+  return Math.max(1, Math.min(100, v));
+}
+function rngAttr(rng: Rng): number {
+  return Math.max(1, Math.min(20, Math.round(rng.range(5, 17))));
+}
+
+function makePerson(rng: Rng, pos: PositionDef): PersonProfile {
+  const determination = rngAttr(rng);
+  const professionalism = rngAttr(rng);
+  const commitment = rngAttr(rng);
+  const pool = pos.forward ? FWD_TRAITS : BACK_TRAITS;
+  const traits: string[] = [];
+  const nTraits = rng.next() < 0.5 ? 0 : rng.next() < 0.7 ? 1 : 2;
+  while (traits.length < nTraits) {
+    const t = rng.pick(pool);
+    if (!traits.includes(t)) traits.push(t);
+  }
+  // can cover adjacent positions of the same type
+  const canPlay = [pos.short];
+  return {
+    job: rng.pick(JOBS),
+    commitment,
+    workFlexibility: rngAttr(rng),
+    injuryProneness: rngAttr(rng),
+    personality: personalityLabel(determination, professionalism, commitment),
+    traits,
+    canPlay,
+  };
+}
+
 function makePlayer(
   rng: Rng,
   team: Team,
@@ -102,15 +171,20 @@ function makePlayer(
   number: number,
   onField: boolean
 ): Player {
+  const age = rng.int(18, 36);
+  const attr = makeAttributes(rng, team.rating, pos);
   return {
     id: nextId++,
     side,
     number,
     name: `${rng.pick(FORENAMES)} ${rng.pick(SURNAMES)}`,
-    age: rng.int(18, 36),
+    age,
     position: pos,
     forward: pos.forward,
-    attr: makeAttributes(rng, team.rating, pos),
+    attr,
+    hidden: makeHidden(rng, attr, age),
+    person: makePerson(rng, pos),
+    condition: { fitness: 100, sharpness: rng.int(70, 100), morale: rng.int(55, 85), injuredWeeks: 0 },
     onField,
     x: 0,
     y: 0,

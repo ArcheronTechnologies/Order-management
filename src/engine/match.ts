@@ -28,6 +28,9 @@ const REDZONE = 22; // m from the line (the 22) where pressure tells
 export interface MatchOptions {
   homeTactics?: TeamTactics;
   awayTactics?: TeamTactics;
+  /** pre-built persistent squads (incl. bench); generated if omitted. */
+  homeSquad?: Player[];
+  awaySquad?: Player[];
 }
 
 /** the shape of attack chosen for a phase. */
@@ -106,10 +109,20 @@ export class Match {
       home: opts.homeTactics ?? { ...DEFAULT_TACTICS },
       away: opts.awayTactics ?? { ...DEFAULT_TACTICS },
     };
+    // use the persistent squads if given (career), else generate (exhibition)
     this.squads = {
-      home: buildSquad(this.rng, home, "home", this.fmt),
-      away: buildSquad(this.rng, away, "away", this.fmt),
+      home: opts.homeSquad ?? buildSquad(this.rng, home, "home", this.fmt),
+      away: opts.awaySquad ?? buildSquad(this.rng, away, "away", this.fmt),
     };
+    // bind each squad to its side and reset live state for this match
+    for (const side of ["home", "away"] as Side[]) {
+      for (const p of this.squads[side]) {
+        p.side = side;
+        p.x = 0;
+        p.y = 0;
+        p.fatigue = 0;
+      }
+    }
     // only the starting XV/VII take the field; the bench waits for subs
     this.players = [...this.squads.home, ...this.squads.away].filter((p) => p.onField);
     this.ball = {

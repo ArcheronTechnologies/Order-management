@@ -371,3 +371,8 @@ button.primary:hover { filter: brightness(1.08); }
 
 /* hidden must beat id-specificity display rules */
 .hidden { display: none !important; }
+
+/* squad view */
+.squad-panel { max-width: 1100px; margin: 16px auto 0; }
+.squad-table td.club .full { margin-left: 0; }
+.squad-table th, .squad-table td { padding: 6px 8px; }

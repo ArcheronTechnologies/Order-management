@@ -75,6 +75,7 @@
         <h1>Fly-Half <span class="sub" id="seasonClub">rugby manager</span></h1>
         <div class="controls">
           <span id="seasonRound" class="round-pill"></span>
+          <button id="squadBtn">Squad</button>
           <button id="openTacticsFromSeason">Tactics</button>
           <button id="newCareer">New career</button>
         </div>
@@ -95,6 +96,27 @@
           <ul id="fixturesList" class="fixtures"></ul>
           <button id="playRound" class="primary">Play your match</button>
         </section>
+      </div>
+    </div>
+
+    <div id="squadView" class="view hidden">
+      <header class="topbar">
+        <h1>Fly-Half <span class="sub" id="squadClub">squad</span></h1>
+        <div class="controls">
+          <button id="squadBack">‹ Season</button>
+        </div>
+      </header>
+      <div class="panel squad-panel">
+        <table class="ladder squad-table">
+          <thead>
+            <tr>
+              <th>Pos</th><th>Name</th><th>Age</th>
+              <th>Str</th><th>Pac</th><th>Han</th><th>Tac</th><th>Kic</th>
+              <th>Abil</th><th>Pot</th><th>Personality</th><th>Job</th>
+            </tr>
+          </thead>
+          <tbody id="squadBody"></tbody>
+        </table>
       </div>
     </div>
 
