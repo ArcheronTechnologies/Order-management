@@ -4,9 +4,11 @@ import { Renderer } from "./render/renderer";
 import { CLUBS } from "./data/clubs";
 import { PRESETS, type TeamTactics } from "./engine/tactics";
 import { Season, quickSim, type Fixture } from "./engine/season";
+import { FORMATS } from "./engine/formats";
 import { Rng } from "./engine/rng";
 import type { Team } from "./engine/teams";
-import { UNION_POSITIONS, setRole, serializePlayer, deserializePlayer } from "./engine/teams";
+import { UNION_POSITIONS, setRole, serializePlayer, deserializePlayer, buildSquad } from "./engine/teams";
+import { SevensCup, sevensLineup, cupEntrants, ROUND_NAMES, type SevensTie } from "./engine/sevens";
 import { developSquad, type SeasonDevelopment } from "./engine/development";
 import {
   applyTraining,
@@ -48,13 +50,15 @@ const careerView = $("careerSetup");
 const seasonView = $("seasonView");
 const squadView = $("squadView");
 const selectView = $("selectView");
-type ViewName = "career" | "season" | "match" | "squad" | "select";
+const sevensView = $("sevensView");
+type ViewName = "career" | "season" | "match" | "squad" | "select" | "sevens";
 function showView(v: ViewName) {
   appView.classList.toggle("hidden", v !== "match");
   careerView.classList.toggle("hidden", v !== "career");
   seasonView.classList.toggle("hidden", v !== "season");
   squadView.classList.toggle("hidden", v !== "squad");
   selectView.classList.toggle("hidden", v !== "select");
+  sevensView.classList.toggle("hidden", v !== "sevens");
 }
 
 // --- match view elements -------------------------------------------------
@@ -756,8 +760,172 @@ function simRestOfRound(skip: Fixture | null) {
   }
 }
 
+// ====================== summer Sevens cup ================================
+let cup: SevensCup | null = null;
+let sevensTie: SevensTie | null = null;
+let sevensSeed = 0;
+const sevensBracket = $("sevensBracket");
+const sevensChampion = $("sevensChampion");
+const sevensRoundPill = $("sevensRound");
+const sevensPlayBtn = $("sevensPlay") as HTMLButtonElement;
+const sevensSimBtn = $("sevensSim") as HTMLButtonElement;
+
+/** A full 7s matchday squad for a team — your club draws from its real roster. */
+function sevensSquadFor(team: Team, side: "home" | "away", seed: number) {
+  if (season && team === season.userClub) {
+    const roster = season.rosterFor(team);
+    sevensLineup(roster);
+    roster.forEach((p) => (p.side = side));
+    return roster;
+  }
+  return buildSquad(new Rng(seed >>> 0), team, side, FORMATS.sevens, 10, season?.repOf(team) ?? team.reputation);
+}
+
+/** Headless-sim a single tie (used for AI ties and abandoned ties). */
+function simSevensTie(tie: SevensTie) {
+  if (!cup) return;
+  const seed = (sevensSeed * 131 + tie.round * 17 + tie.slot * 7) >>> 0;
+  const hs = sevensSquadFor(tie.a, "home", seed * 3 + 1);
+  const as = sevensSquadFor(tie.b, "away", seed * 3 + 2);
+  const m = new Match(seed, "sevens", tie.a, tie.b, { homeSquad: hs, awaySquad: as });
+  let g = 0;
+  while (!m.finished && g < 200000) {
+    m.step(0.05);
+    g++;
+  }
+  cup.record(tie, m.score.home, m.score.away);
+}
+
+function startSevensCup() {
+  if (!season) return;
+  const entrants = cupEntrants(CLUBS, season.userClub, (t) => season!.repOf(t));
+  sevensSeed = (seasonSeed * 7919 + season.year * 31) >>> 0;
+  cup = new SevensCup(entrants, season.userClub);
+  renderSevens();
+}
+
+function renderSevens() {
+  if (!cup || !season) return;
+  showView("sevens");
+  sevensChampion.classList.toggle("hidden", !cup.champion);
+  const ut = cup.userTie();
+  sevensPlayBtn.classList.toggle("hidden", !ut || cup.isComplete());
+  sevensSimBtn.classList.toggle("hidden", cup.isComplete() || cup.roundComplete());
+  sevensRoundPill.textContent = cup.isComplete()
+    ? "Cup complete"
+    : `${ROUND_NAMES[cup.round]}`;
+
+  if (cup.champion) {
+    sevensChampion.innerHTML =
+      cup.champion === season.userClub
+        ? `🏆 <strong>Sevens champions!</strong> ${cup.champion.name} win the cup.`
+        : `Cup won by <strong>${cup.champion.name}</strong>.`;
+  }
+
+  // bracket as columns per round
+  const maxRound = cup.champion ? 3 : cup.round;
+  const cols: string[] = [];
+  for (let r = 1; r <= 3; r++) {
+    const ties = cup.ties.filter((t) => t.round === r);
+    const rows = ties
+      .map((t) => {
+        const mine = t.a === season!.userClub || t.b === season!.userClub;
+        const win = t.played ? cup!.winnerOf(t) : null;
+        const line = (team: Team, score: number) =>
+          `<div class="bt-team ${win === team ? "win" : ""}"><span>${team.short}</span><span>${t.played ? score : ""}</span></div>`;
+        return `<div class="bt-tie ${mine ? "mine" : ""}">${line(t.a, t.aScore)}${line(t.b, t.bScore)}</div>`;
+      })
+      .join("");
+    cols.push(`<div class="bt-col ${r > maxRound ? "future" : ""}"><h3>${ROUND_NAMES[r]}</h3>${rows || '<p class="bt-tbd">—</p>'}</div>`);
+  }
+  sevensBracket.innerHTML = cols.join("");
+}
+
+/** After the user's tie is decided: sim the other ties this round, then advance. */
+function finishSevensRound() {
+  if (!cup) return;
+  for (const t of cup.roundTies()) if (!t.played) simSevensTie(t);
+  cup.advance();
+  if (cup.isComplete()) applySevensReward();
+  sevensTie = null;
+  currentFixture = null;
+  backToSeasonBtn.classList.add("hidden");
+  backToSeasonBtn.classList.remove("primary");
+  simBtn.classList.add("hidden");
+  subsBtn.classList.add("hidden");
+  renderSevens();
+}
+
+function applySevensReward() {
+  if (!cup || !season || cup.champion !== season.userClub) return;
+  // a cup run lifts morale and nudges reputation
+  const roster = season.rosterFor(season.userClub);
+  for (const p of roster) p.condition.morale = Math.min(100, p.condition.morale + 4);
+  season.reputation.set(season.userClub, Math.min(100, season.repOf(season.userClub) + 2));
+  save();
+}
+
+function startSevensMatch(tie: SevensTie) {
+  if (!season) return;
+  sevensTie = tie;
+  currentFixture = null;
+  const seed = (sevensSeed * 131 + tie.round * 17 + tie.slot * 7) >>> 0;
+  const hs = sevensSquadFor(tie.a, "home", seed * 3 + 1);
+  const as = sevensSquadFor(tie.b, "away", seed * 3 + 2);
+  userSide = tie.a === season.userClub ? "home" : "away";
+  match = new Match(seed, "sevens", tie.a, tie.b, {
+    homeTactics: userSide === "home" ? userTactics : { ...PRESETS[0].tactics },
+    awayTactics: userSide === "away" ? userTactics : { ...PRESETS[0].tactics },
+    homeSquad: hs,
+    awaySquad: as,
+  });
+  renderedCommentary = 0;
+  eventsEl.innerHTML = "";
+  homeNameEl.textContent = tie.a.name;
+  awayNameEl.textContent = tie.b.name;
+  formatLabel.classList.add("hidden");
+  newBtn.classList.add("hidden");
+  simBtn.classList.remove("hidden");
+  subsBtn.classList.remove("hidden");
+  backToSeasonBtn.classList.remove("hidden");
+  backToSeasonBtn.textContent = "‹ Cup";
+  showView("match");
+  syncScoreboard();
+  renderer.resize();
+  renderer.draw(match);
+  setPlaying(true);
+}
+
+function finishSevensMatch() {
+  if (!cup || !sevensTie || !match) return;
+  cup.record(sevensTie, match.score.home, match.score.away);
+  finishSevensRound();
+}
+
+$("sevensBtn").addEventListener("click", () => {
+  if (!cup || cup.isComplete()) startSevensCup();
+  else renderSevens();
+});
+$("sevensBack").addEventListener("click", () => renderSeason());
+sevensPlayBtn.addEventListener("click", () => {
+  const ut = cup?.userTie();
+  if (ut) startSevensMatch(ut);
+});
+sevensSimBtn.addEventListener("click", () => {
+  if (!cup) return;
+  finishSevensRound();
+});
+
 backToSeasonBtn.addEventListener("click", () => {
   setPlaying(false);
+  if (sevensTie) {
+    if (match && match.finished) finishSevensMatch();
+    else if (confirm("Leave this tie? It will be quick-simmed instead.")) {
+      simSevensTie(sevensTie);
+      finishSevensRound();
+    }
+    return;
+  }
   if (match && match.finished) {
     showTeamTalk("full").then(() => finishUserMatch());
   } else if (confirm("Leave this match? It will be quick-simmed instead.")) {

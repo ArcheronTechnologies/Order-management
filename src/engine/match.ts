@@ -285,8 +285,14 @@ export class Match {
     let burst = 1;
     if (this.breakawayTimer > 0) {
       // the breaker gets a burst into space; the defence scrambles a bit faster
-      // too, so only a genuinely quicker player finishes the line break
-      burst = p.id === this.breakawayId ? 1.18 : p.side !== this.possession ? 1.14 : 1;
+      // too, so only a genuinely quicker player finishes the line break. In
+      // sevens the cover is so thin that a clean break usually goes the distance.
+      const sevens = this.fmt.id === "sevens";
+      burst = p.id === this.breakawayId
+        ? (sevens ? 1.34 : 1.18)
+        : p.side !== this.possession
+          ? (sevens ? 1.05 : 1.14)
+          : 1;
     }
     // unfit players carry less around the park
     const fit = 0.82 + 0.18 * (p.condition.fitness / 100);
@@ -794,8 +800,9 @@ export class Match {
       for (const p of defList) {
         if (this.beaten.has(p.id)) continue;
         if (Math.abs(p.x - lineX) > 3) continue; // must be set on the line
-        // a well-positioned defender reads the line and covers a wider channel
-        const reach = 1.6 + p.attr.positioning * 0.07;
+        // a well-positioned defender reads the line and covers a wider channel;
+        // in sevens there's far more grass between defenders, so cover is thinner
+        const reach = (1.6 + p.attr.positioning * 0.07) * (this.fmt.id === "sevens" ? 0.62 : 1);
         const dy = Math.abs(p.y - carrier.y);
         if (dy <= reach && dy < gd) {
           gd = dy;
@@ -813,9 +820,19 @@ export class Match {
       // nobody home in that channel — clean line break! the carrier gets a pace
       // burst into space, so a quick player can outrun the cover for a try while
       // a forward gets hauled down (a big gain). Beat the nearest two markers.
+      // in sevens the cover is so sparse that a clean break usually goes all the
+      // way — a quick player away in space is gone
+      if (this.fmt.id === "sevens" && this.rng.chance(clamp(0.5 + (carrier.attr.pace - 10) * 0.03, 0.32, 0.85))) {
+        this.say(`${carrier.name} is through — and away to score!`);
+        this.debug.tryRun++;
+        carrier.x = line + dir * 0.5;
+        this.ball.x = carrier.x;
+        this.scoreTry(carrier);
+        return;
+      }
       this.say(`${carrier.name} is through the line!`);
       this.breakawayId = carrier.id;
-      this.breakawayTimer = 2.2;
+      this.breakawayTimer = this.fmt.id === "sevens" ? 5 : 2.2;
       defList
         .map((p) => ({ p, dy: Math.abs(p.y - carrier.y) }))
         .sort((a, b) => a.dy - b.dy)
@@ -954,9 +971,9 @@ export class Match {
         // overlap: a pass into clear space in the opponent half can spring a break
         const space = this.distToNearestOpp(receiver);
         const inOppHalf = (line - receiver.x) * dir < PITCH.fieldLength / 2;
-        if (space > 14 && inOppHalf && this.rng.chance(0.1)) {
+        if (space > 14 && inOppHalf && this.rng.chance(this.fmt.id === "sevens" ? 0.2 : 0.1)) {
           this.breakawayId = receiver.id;
-          this.breakawayTimer = 1.8;
+          this.breakawayTimer = this.fmt.id === "sevens" ? 4.5 : 1.8;
         }
         this.launchBall(receiver.x, receiver.y, PASS_SPEED, false, carrier);
         this.phase = "flight";
@@ -1006,9 +1023,10 @@ export class Match {
         pressure -
         aggression * 0.04 -
         (tackler.attr.positioning - 10) / 150 -
-        (sys === "blitz" ? 0.03 : 0),
+        (sys === "blitz" ? 0.03 : 0) +
+        (this.fmt.id === "sevens" ? 0.1 : 0), // far more space in sevens
       0.02,
-      0.34
+      this.fmt.id === "sevens" ? 0.45 : 0.34
     );
     this.bump(carrier, "carries");
     if (this.rng.chance(breakP)) {

@@ -115,6 +115,14 @@ refactor everything else needs).
 - **M13 — Competitions & game world.** Full Swedish pyramid + promotion/relegation,
   cups, Grand Final, Nordic Cup, Sevens series; then Denmark/Norway/Germany/USA
   leagues; women's rugby; national-team management.
+  - *Done (sevens):* a **summer Sevens Cup** — an eight-team single-elimination
+    tournament (seeded by reputation) you reach from the season hub. Your club
+    fields a 7s VII drawn from its real squad (three mobile forwards, four quick
+    backs); play your ties in the match view or sim the round, advancing to a
+    champion (winning it lifts squad morale & reputation). The 7s match engine
+    was rebalanced — far more open space, decisive clean breaks — so games are
+    high-scoring and competitive (`sevens.ts`, sevens-gated engine tuning).
+    *Still to do:* the pyramid, promotion/relegation, Grand Final, other nations.
 - **M14 — Manager & career meta.** Manager creator, backstory, coaching badges,
   job offers/interviews, journeyman, career history.
 - **M15 — Media & reputation.** Local press conferences, interviews, social feed,
