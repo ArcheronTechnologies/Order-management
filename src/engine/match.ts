@@ -181,6 +181,29 @@ export class Match {
   setTactics(side: Side, patch: Partial<TeamTactics>) {
     this.tactics[side] = { ...this.tactics[side], ...patch };
   }
+
+  /** subs used per side this match (union allows up to 8). */
+  subsUsed: Record<Side, number> = { home: 0, away: 0 };
+  readonly maxSubs = 8;
+
+  /** Bring a bench player on for an on-field one. Returns false if not allowed. */
+  substitute(side: Side, offId: number, onId: number): boolean {
+    if (this.finished || this.subsUsed[side] >= this.maxSubs) return false;
+    const off = this.squads[side].find((p) => p.id === offId && p.onField);
+    const on = this.squads[side].find((p) => p.id === onId && !p.onField);
+    if (!off || !on || off === on) return false;
+    off.onField = false;
+    on.onField = true;
+    on.number = off.number; // takes the vacated shirt for the dots
+    on.x = off.x;
+    on.y = off.y;
+    on.fatigue = 0;
+    if (this.ball.carrier === off) this.ball.carrier = on; // keep play continuous
+    this.players = [...this.squads.home, ...this.squads.away].filter((p) => p.onField);
+    this.subsUsed[side]++;
+    this.say(`Substitution (${this.teamOf(side).short}): ${on.name} on for ${off.name}.`);
+    return true;
+  }
   private side(s: Side): Player[] {
     return this.players.filter((p) => p.side === s);
   }

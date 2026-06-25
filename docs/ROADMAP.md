@@ -94,8 +94,12 @@ refactor everything else needs).
     possession & territory split bars, tries, line breaks, tackle success,
     kicks from hand, turnovers won, penalties conceded, and scrum/lineout
     retention %. Per-side stats accumulated in the engine (`Match.stats` /
-    `SideStats`), updating every frame. *Still to do:* follow-ball camera/zoom,
-    view modes, substitutions UI.
+    `SideStats`), updating every frame.
+  - *Done (subs):* **live substitutions** — a touchline Subs panel pauses the
+    match, lists your on-field XV (with fitness) and available bench (with CA),
+    and brings a replacement on (up to 8, union limit). The engine swaps them
+    on the dots mid-play, keeping the ball with the new man if needed
+    (`Match.substitute`). *Still to do:* follow-ball camera/zoom, view modes.
 - **M10 — Recruitment, retention & staff.** Local catchment, uni links, walk-ups,
   trials; scouting reports/shortlists; retention vs life-pull; volunteer staff.
 - **M11 — Club operations, finances & committee.** Costs vs income; semi-pro

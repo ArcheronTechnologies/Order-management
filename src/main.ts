@@ -211,6 +211,56 @@ function showTeamTalk(phase: TalkPhase): Promise<void> {
   });
 }
 
+// ====================== substitutions (live) =============================
+const subsOverlay = $("subsOverlay");
+const subOff = $("subOff") as HTMLSelectElement;
+const subOn = $("subOn") as HTMLSelectElement;
+const subsUsedEl = $("subsUsed");
+const subsBtn = $("subsBtn") as HTMLButtonElement;
+let subsResumeAfter = false;
+
+function fillSubsSelects() {
+  if (!match) return;
+  const squad = match.squads[userSide];
+  const onField = squad.filter((p) => p.onField).sort((a, b) => a.number - b.number);
+  const bench = squad.filter((p) => !p.onField && p.condition.injuredWeeks === 0);
+  subOff.innerHTML = onField
+    .map((p) => `<option value="${p.id}">${p.position.short} · ${p.name} (${Math.round(p.condition.fitness)}% fit)</option>`)
+    .join("");
+  subOn.innerHTML = bench.length
+    ? bench
+        .map((p) => `<option value="${p.id}">${p.position.short} · ${p.name} · CA ${p.hidden.currentAbility}</option>`)
+        .join("")
+    : `<option value="">No replacements available</option>`;
+  const left = match.maxSubs - match.subsUsed[userSide];
+  subsUsedEl.textContent = `${match.subsUsed[userSide]}/${match.maxSubs} used · ${left} left`;
+}
+function openSubs() {
+  if (!match || match.finished) return;
+  subsResumeAfter = playing;
+  setPlaying(false);
+  fillSubsSelects();
+  subsOverlay.classList.remove("hidden");
+}
+function closeSubs() {
+  subsOverlay.classList.add("hidden");
+  if (subsResumeAfter) setPlaying(true);
+}
+subsBtn.addEventListener("click", openSubs);
+$("subsClose").addEventListener("click", closeSubs);
+$("makeSubBtn").addEventListener("click", () => {
+  if (!match) return;
+  const offId = Number(subOff.value);
+  const onId = Number(subOn.value);
+  if (!offId || !onId) return;
+  if (match.substitute(userSide, offId, onId)) {
+    flushCommentary();
+    fillSubsSelects();
+    renderer.draw(match);
+    if (match.subsUsed[userSide] >= match.maxSubs) closeSubs();
+  }
+});
+
 const squadBody = $("squadBody");
 const squadClub = $("squadClub");
 const roleCaptain = $("roleCaptain") as HTMLSelectElement;
@@ -636,6 +686,7 @@ function startUserMatch(fixture: Fixture) {
   formatLabel.classList.add("hidden"); // league is Union
   newBtn.classList.add("hidden");
   simBtn.classList.remove("hidden");
+  subsBtn.classList.remove("hidden");
   backToSeasonBtn.classList.remove("hidden");
   backToSeasonBtn.textContent = "‹ Season";
   showView("match");
@@ -671,6 +722,7 @@ function finishUserMatch() {
   backToSeasonBtn.classList.add("hidden");
   backToSeasonBtn.classList.remove("primary");
   simBtn.classList.add("hidden");
+  subsBtn.classList.add("hidden");
   renderSeason();
 }
 

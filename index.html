@@ -29,6 +29,7 @@
             </select>
           </label>
           <button id="tacticsBtn">Tactics</button>
+          <button id="subsBtn" class="hidden">Subs</button>
           <button id="playPause">Play</button>
           <button id="simMatch" class="hidden">Sim ⏩</button>
           <button id="newMatch">New match</button>
@@ -184,6 +185,23 @@
         <div class="tac-group">
           <h3>Instructions</h3>
           <div id="sliders"></div>
+        </div>
+      </div>
+    </div>
+    <div id="subsOverlay" class="overlay hidden">
+      <div class="talk-card">
+        <div class="talk-head">
+          <h2>Substitutions</h2>
+          <span id="subsUsed" class="talk-context"></span>
+        </div>
+        <p class="talk-hint">Bring a replacement on for a player on the pitch.</p>
+        <div class="subs-grid">
+          <div class="role-pick"><label for="subOff">Off</label><select id="subOff"></select></div>
+          <div class="role-pick"><label for="subOn">On</label><select id="subOn"></select></div>
+        </div>
+        <div class="subs-actions">
+          <button id="makeSubBtn" class="primary-inline">Make substitution</button>
+          <button id="subsClose">Close</button>
         </div>
       </div>
     </div>
