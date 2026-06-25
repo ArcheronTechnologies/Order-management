@@ -133,7 +133,12 @@ refactor everything else needs).
     you don't play are quick-simmed (`season.simStandings`). Club picker grouped
     by tier; season header shows your division; end-of-season banner spells out
     your fate and a pyramid summary lists who went up/down.
-    *Still to do:* Grand Final, Nordic Cup, other nations, women's rugby.
+  - *Done (Grand Final):* the two **Allsvenskan regional champions** meet in a
+    cross-region **Grand Final** for the national title. If your club tops its
+    region you play the final in the match view (else it's simmed and the national
+    champion shown); winning it boosts reputation & morale. Resolved before the
+    promotion/relegation rollover and persisted (`gfResolved`/`nationalChamp`).
+    *Still to do:* Nordic Cup, other nations, women's rugby.
 - **M14 — Manager & career meta.** Manager creator, backstory, coaching badges,
   job offers/interviews, journeyman, career history.
 - **M15 — Media & reputation.** Local press conferences, interviews, social feed,

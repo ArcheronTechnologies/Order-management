@@ -364,6 +364,8 @@ function save() {
     year: season.year,
     reputation: repState, // all 24 clubs
     tiers,
+    gfResolved,
+    nationalChamp: nationalChamp?.short,
     tactics: userTactics,
     results: season.fixtures
       .filter((f) => f.played)
@@ -394,6 +396,8 @@ function load(): boolean {
       : undefined;
     season = new Season(divisionFor(user), user, seasonSeed, { reputation: repState, year: d.year }, carry);
     season.round = d.round;
+    gfResolved = !!d.gfResolved;
+    nationalChamp = d.nationalChamp ? CLUBS.find((c) => c.short === d.nationalChamp) ?? null : null;
     userTactics = d.tactics ?? { ...PRESETS[0].tactics };
     trainingPlan = d.training ?? { ...DEFAULT_TRAINING };
     for (const r of d.results ?? []) {
@@ -458,6 +462,9 @@ function startCareer(club: Team) {
   lastDev = null;
   lastMom = null;
   lastRatings = [];
+  gfResolved = false;
+  nationalChamp = null;
+  gfTie = null;
   save();
   renderSeason();
 }
@@ -558,15 +565,29 @@ function renderSeason() {
     else if (top && pos === 5) fate = " Into a <strong>relegation playoff</strong>.";
     else if (!top && pos === 1) fate = " <strong>Promoted</strong> to the Allsvenskan!";
     else if (!top && pos === 2) fate = " Into a <strong>promotion playoff</strong>.";
+    // Grand Final: the two Allsvenskan regional champions meet for the national
+    // title. If the user isn't a finalist, resolve it now; otherwise they play it.
+    const { nC, sC } = grandFinalPair();
+    const finalist = userIsFinalist();
+    if (!gfResolved && !finalist) {
+      const r = quickSim(nC, sC, new Rng((seasonSeed * 13 + 7) >>> 0));
+      nationalChamp = r.hs >= r.as ? nC : sC;
+      gfResolved = true;
+    }
+    const gfLine = gfResolved && nationalChamp
+      ? ` 🏅 <strong>Grand Final:</strong> ${nationalChamp.name} are national champions (${nC.short} v ${sC.short}).`
+      : finalist
+        ? ` ⭐ You're in the <strong>Grand Final</strong> v ${(season.userClub === nC ? sC : nC).name}!`
+        : "";
     championBanner.innerHTML =
       (champ === season.userClub
         ? `🏆 <strong>Champions!</strong> ${champ.name} win ${divisionLabel(season.userClub)}.`
         : `Season over — <strong>${champ.name}</strong> win ${divisionLabel(season.userClub)}. You finished ${ordinal(pos)}.`) +
-      fate +
+      fate + gfLine +
       `<span class="rep-note"> Your reputation: ${myRep}/100</span>`;
     fixturesTitle.textContent = "Final standings";
     fixturesList.innerHTML = "";
-    playRoundBtn.textContent = `Start year ${season.year + 1} ›`;
+    playRoundBtn.textContent = finalist && !gfResolved ? "⭐ Play Grand Final" : `Start year ${season.year + 1} ›`;
     playRoundBtn.classList.remove("hidden");
     save();
     return;
@@ -604,7 +625,12 @@ function renderSeason() {
 playRoundBtn.addEventListener("click", () => {
   if (!season) return;
   if (season.isComplete()) {
-    startNextSeason();
+    if (userIsFinalist() && !gfResolved) {
+      const { nC, sC } = grandFinalPair();
+      startGrandFinal(nC, sC);
+    } else {
+      startNextSeason();
+    }
     return;
   }
   const userFx = season.userFixture(season.round);
@@ -621,6 +647,22 @@ let lastDev: SeasonDevelopment | null = null; // pre-season changes, surfaced in
 let lastRolloverSummary: string | null = null; // promotion/relegation news for the note
 let pendingRolloverYear = 0; // year being rolled into (set while a playoff is pending)
 let playoffTie: { a: Team; b: Team } | null = null; // a = Allsvenskan 5th, b = Div1 2nd
+// Grand Final: the two Allsvenskan regional champions meet for the national title
+let gfResolved = false;
+let nationalChamp: Team | null = null;
+let gfTie: { a: Team; b: Team } | null = null;
+
+function regionChamp(region: "north" | "south"): Team {
+  return divisionStandings(region, "allsvenskan", new Rng((seasonSeed * 991 + (region === "north" ? 1 : 2)) >>> 0))[0];
+}
+function grandFinalPair(): { nC: Team; sC: Team } {
+  return { nC: regionChamp("north"), sC: regionChamp("south") };
+}
+function userIsFinalist(): boolean {
+  if (!season || currentTier(season.userClub) !== "allsvenskan") return false;
+  const { nC, sC } = grandFinalPair();
+  return season.userClub === nC || season.userClub === sC;
+}
 
 function clubsIn(region: "north" | "south", tier: "allsvenskan" | "div1"): Team[] {
   return CLUBS.filter((c) => c.region === region && currentTier(c) === tier);
@@ -750,8 +792,65 @@ function finalizeRollover() {
   lastSnubs = [];
   lastMom = null;
   lastRatings = [];
+  gfResolved = false;
+  nationalChamp = null;
+  gfTie = null;
   save();
   renderSeason();
+}
+
+/** Play the cross-region Grand Final (national title) — user is one of the two. */
+function startGrandFinal(nC: Team, sC: Team) {
+  if (!season) return;
+  gfTie = { a: nC, b: sC };
+  const user = season.userClub;
+  const seed = (seasonSeed * 211 + 23) >>> 0;
+  const userIsHome = nC === user; // north champ is "home"
+  const userRoster = season.rosterFor(user);
+  const av = rollAvailability(userRoster, seed, repState[user.short] ?? user.reputation);
+  autoSelect(userRoster, new Set(av.filter((x) => x.available).map((x) => x.player.id)));
+  const opp = userIsHome ? sC : nC;
+  const oppRoster = buildSquad(new Rng((seed * 7 + 3) >>> 0), opp, userIsHome ? "away" : "home", FORMATS.union, undefined, repState[opp.short] ?? opp.reputation);
+  userSide = userIsHome ? "home" : "away";
+  currentFixture = null;
+  match = new Match(seed, "union", nC, sC, {
+    homeTactics: userIsHome ? userTactics : { ...PRESETS[0].tactics },
+    awayTactics: userIsHome ? { ...PRESETS[0].tactics } : userTactics,
+    homeSquad: userIsHome ? userRoster : oppRoster,
+    awaySquad: userIsHome ? oppRoster : userRoster,
+  });
+  renderedCommentary = 0;
+  eventsEl.innerHTML = "";
+  homeNameEl.textContent = nC.name;
+  awayNameEl.textContent = sC.name;
+  formatLabel.classList.add("hidden");
+  newBtn.classList.add("hidden");
+  simBtn.classList.remove("hidden");
+  subsBtn.classList.remove("hidden");
+  backToSeasonBtn.classList.remove("hidden");
+  backToSeasonBtn.textContent = "Grand Final";
+  showView("match");
+  syncScoreboard();
+  renderer.resize();
+  renderer.draw(match);
+  setPlaying(true);
+}
+
+function finishGrandFinal() {
+  if (!gfTie || !match || !season) return;
+  nationalChamp = match.score.home >= match.score.away ? gfTie.a : gfTie.b;
+  gfResolved = true;
+  // lifting the national title is a big reputation & morale boost
+  if (nationalChamp === season.userClub) {
+    repState[season.userClub.short] = Math.min(100, (repState[season.userClub.short] ?? season.userClub.reputation) + 4);
+    for (const pl of season.rosterFor(season.userClub)) pl.condition.morale = Math.min(100, pl.condition.morale + 5);
+  }
+  gfTie = null;
+  simBtn.classList.add("hidden");
+  subsBtn.classList.add("hidden");
+  backToSeasonBtn.classList.add("hidden");
+  backToSeasonBtn.classList.remove("primary");
+  renderSeason(); // back to the complete-season view, now showing the national champ
 }
 
 // ====================== team selection ===================================
@@ -1088,6 +1187,10 @@ sevensSimBtn.addEventListener("click", () => {
 
 backToSeasonBtn.addEventListener("click", () => {
   setPlaying(false);
+  if (gfTie) {
+    if (match && match.finished) finishGrandFinal();
+    return; // see the Grand Final through
+  }
   if (playoffTie) {
     if (match && match.finished) finishPlayoffMatch();
     return; // a playoff must be seen through — no bailing out
