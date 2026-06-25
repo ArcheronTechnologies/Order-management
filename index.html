@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Fly-Half — Rugby Manager</title>
+  </head>
+  <body>
+    <div id="app">
+      <header class="topbar">
+        <h1>Fly-Half <span class="sub">rugby match engine</span></h1>
+        <div class="controls">
+          <label>
+            Format
+            <select id="format">
+              <option value="union">Union (15s)</option>
+              <option value="sevens">Sevens (7s)</option>
+            </select>
+          </label>
+          <label>
+            Speed
+            <select id="speed">
+              <option value="1">1×</option>
+              <option value="2" selected>2×</option>
+              <option value="4">4×</option>
+              <option value="8">8×</option>
+            </select>
+          </label>
+          <button id="playPause">Play</button>
+          <button id="newMatch">New match</button>
+        </div>
+      </header>
+
+      <div class="scoreboard">
+        <div class="team home">
+          <span class="name" id="homeName">Home</span>
+          <span class="score" id="homeScore">0</span>
+        </div>
+        <div class="clock">
+          <span id="clock">00:00</span>
+          <span class="half" id="half">1st half</span>
+        </div>
+        <div class="team away">
+          <span class="score" id="awayScore">0</span>
+          <span class="name" id="awayName">Away</span>
+        </div>
+      </div>
+
+      <main class="stage">
+        <canvas id="pitch"></canvas>
+        <aside class="feed">
+          <h2>Commentary</h2>
+          <ul id="events"></ul>
+        </aside>
+      </main>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
