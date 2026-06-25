@@ -99,7 +99,13 @@ refactor everything else needs).
     match, lists your on-field XV (with fitness) and available bench (with CA),
     and brings a replacement on (up to 8, union limit). The engine swaps them
     on the dots mid-play, keeping the ball with the new man if needed
-    (`Match.substitute`). *Still to do:* follow-ball camera/zoom, view modes.
+    (`Match.substitute`).
+  - *Done (ratings):* **player match ratings & man of the match** — per-player
+    contributions tracked in the engine and normalised against the field into
+    4.5–10.0 ratings; the man of the match and your top performer are surfaced
+    post-match, and a blinder lifts morale while a stinker dents it
+    (`ratings.ts`, `Match.contrib`). *Still to do:* follow-ball camera/zoom,
+    view modes.
 - **M10 — Recruitment, retention & staff.** Local catchment, uni links, walk-ups,
   trials; scouting reports/shortlists; retention vs life-pull; volunteer staff.
 - **M11 — Club operations, finances & committee.** Costs vs income; semi-pro

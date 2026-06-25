@@ -32,6 +32,7 @@ import {
   type Snub,
 } from "./engine/availability";
 import { deliverTalk, TONES, type TalkPhase, type TalkTone } from "./engine/teamtalk";
+import { rateSide, manOfTheMatch, type PlayerRating } from "./engine/ratings";
 import { createTacticsPanel } from "./ui/tactics-panel";
 import type { Side } from "./engine/types";
 
@@ -97,6 +98,8 @@ let currentFixture: Fixture | null = null; // the user's fixture being played
 let userSide: Side = "home"; // which side of the current match the user manages
 let lastHalf = 1; // to detect the half-time break for a talk
 let lastSnubs: Snub[] = []; // fringe players unhappy at being left out last match
+let lastMom: PlayerRating | null = null; // man of the match (either side)
+let lastRatings: PlayerRating[] = []; // your XV's ratings last match
 
 const tacticsPanel = createTacticsPanel((t) => {
   userTactics = t;
@@ -412,6 +415,8 @@ function startCareer(club: Team) {
   trainingPlan = { ...DEFAULT_TRAINING };
   lastTraining = null;
   lastDev = null;
+  lastMom = null;
+  lastRatings = [];
   save();
   renderSeason();
 }
@@ -434,6 +439,12 @@ function renderDressingRoom() {
     if (lastDev.intake.length) seg.push(`${lastDev.intake.length} joined`);
     if (lastDev.risers.length) seg.push(`rising: ${lastDev.risers.slice(0, 3).map((p) => p.name).join(", ")}`);
     if (seg.length) parts.push(`📋 Pre-season: ${seg.join(" · ")}.`);
+  }
+  // last match's ratings & man of the match
+  if (lastMom) {
+    const star = lastRatings[0];
+    const mine = star ? ` Top for us: ${star.player.name} ${star.rating.toFixed(1)}.` : "";
+    parts.push(`🏅 Man of the match: ${lastMom.player.name} (${lastMom.rating.toFixed(1)}).${mine}`);
   }
   // only surface players who genuinely mind being left out (not the mildly annoyed)
   const serious = lastSnubs.filter((s) => s.severity !== "annoyed");
@@ -564,6 +575,8 @@ function startNextSeason() {
   seasonSeed = (seasonSeed * 1103515245 + 12345) >>> 0;
   season = new Season(divisionFor(user), user, seasonSeed, { reputation, year }, carry);
   lastSnubs = [];
+  lastMom = null;
+  lastRatings = [];
   save();
   renderSeason();
 }
@@ -704,6 +717,13 @@ function finishUserMatch() {
   season.record(currentFixture, match.score.home, match.score.away, ht, at);
   // game-time morale: starters lift, snubbed fringe players stew
   const won = match.score[userSide] > match.score[userSide === "home" ? "away" : "home"];
+  // post-match player ratings & man of the match (before the match is cleared)
+  lastRatings = rateSide(match, userSide);
+  lastMom = manOfTheMatch(match);
+  for (const r of lastRatings) {
+    const d = (r.rating - 6.5) * 1.1; // a blinder lifts, a stinker dents
+    r.player.condition.morale = Math.max(0, Math.min(100, r.player.condition.morale + d));
+  }
   lastSnubs = applySelectionMorale(season.rosterFor(season.userClub), won);
   lastDev = null; // pre-season summary clears once the season is under way
   // your XV tire & risk knocks; then the whole league recovers a week

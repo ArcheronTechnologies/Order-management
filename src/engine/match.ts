@@ -65,6 +65,19 @@ export interface SideStats {
   lineoutLost: number;
   tries: number;
 }
+/** Per-player tallies accumulated for post-match ratings. */
+export interface PlayerContribution {
+  carries: number;
+  tackles: number;
+  missed: number;
+  breaks: number;
+  tries: number;
+  turnovers: number;
+  kicks: number;
+}
+function newContribution(): PlayerContribution {
+  return { carries: 0, tackles: 0, missed: 0, breaks: 0, tries: 0, turnovers: 0, kicks: 0 };
+}
 function newStats(): SideStats {
   return {
     possSecs: 0, terrSecs: 0, tackles: 0, missedTackles: 0, lineBreaks: 0,
@@ -96,6 +109,8 @@ export class Match {
   talkBoost: Record<Side, number> = { home: 0, away: 0 };
   /** live match stats per side, for the broadcast panel. */
   stats: Record<Side, SideStats> = { home: newStats(), away: newStats() };
+  /** per-player contributions, for post-match ratings & man of the match. */
+  contrib = new Map<number, PlayerContribution>();
   /** counters for tuning/debug (not shown in the UI). */
   debug = { rucks: 0, breaks: 0, gateContacts: 0, cleanBreaks: 0, endpoint: 0, kicks: 0, turnovers: 0, phases: 0, tryRun: 0, tryDive: 0, tryPush: 0, tryMaul: 0 };
 
@@ -247,6 +262,16 @@ export class Match {
       0.015,
       0.13
     );
+  }
+
+  /** credit a player with a contribution toward their match rating. */
+  private bump(p: Player, key: keyof PlayerContribution, n = 1) {
+    let c = this.contrib.get(p.id);
+    if (!c) {
+      c = newContribution();
+      this.contrib.set(p.id, c);
+    }
+    c[key] += n;
   }
 
   private say(text: string, kind?: CommentaryLine["kind"]) {
@@ -784,6 +809,7 @@ export class Match {
       }
       this.debug.cleanBreaks++;
       this.stats[this.possession].lineBreaks++;
+      this.bump(carrier, "breaks");
       // nobody home in that channel — clean line break! the carrier gets a pace
       // burst into space, so a quick player can outrun the cover for a try while
       // a forward gets hauled down (a big gain). Beat the nearest two markers.
@@ -885,6 +911,7 @@ export class Match {
       this.phase = "flight";
       this.debug.kicks++;
       this.stats[carrier.side].kicks++;
+      this.bump(carrier, "kicks");
       this.say(`${carrier.name} kicks for territory.`);
       return;
     }
@@ -983,9 +1010,12 @@ export class Match {
       0.02,
       0.34
     );
+    this.bump(carrier, "carries");
     if (this.rng.chance(breakP)) {
       this.debug.breaks++;
       this.stats[tackler.side].missedTackles++;
+      this.bump(carrier, "breaks");
+      this.bump(tackler, "missed");
       const dir = attackDir(carrier.side);
       // beating a blitz springs you into the space behind the rushed-up line
       if (sys === "blitz" && distToLine > 6) {
@@ -1012,6 +1042,7 @@ export class Match {
     // tackle complete -> ruck. High tempo recycles quicker.
     this.debug.rucks++;
     this.stats[tackler.side].tackles++;
+    this.bump(tackler, "tackles");
     this.phase = "ruck";
     const tempoFactor = lerpSlider(this.tactics[carrier.side].tempo, 1.35, 0.6);
     this.phaseTimer = this.rng.range(1.4, 3.0) * tempoFactor;
@@ -1121,7 +1152,9 @@ export class Match {
     this.stats[this.possession].turnoversWon++;
     this.phaseCount = 0;
     this.say(`Turnover — ${this.teamOf(this.possession).short} have it.`);
-    this.enterOpen(this.nearestOf(this.possession, x, y), true);
+    const winner = this.nearestOf(this.possession, x, y);
+    this.bump(winner, "turnovers");
+    this.enterOpen(winner, true);
   }
 
   // --- SET PIECES (scrum & lineout) ----------------------------------------
@@ -1293,6 +1326,7 @@ export class Match {
     const side = scorer.side;
     this.score[side] += 5;
     this.stats[side].tries++;
+    this.bump(scorer, "tries");
     const ev: ScoreEvent = {
       clock: this.clock,
       side,
