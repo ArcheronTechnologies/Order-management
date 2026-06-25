@@ -97,8 +97,15 @@ refactor everything else needs).
     **scrum** (steady / channel-one quick ball / pushover → a real try threat near
     the line) and **restart** (long vs contest → kick short and try to win it
     back). Wired into the scrum/lineout/kickoff resolution (`tactics.ts`,
-    `match.ts`). *Still to do:* per-position roles & duties, opposition
-    instructions, phase-split instructions, familiarity.
+    `match.ts`).
+  - *Done (duties & opposition):* **per-position player duties** (Playmaker,
+    Fetcher, Ball-carrier, Crash-ball, Distributor, Enforcer, …) that feed the
+    engine — a Fetcher openside wins more turnovers, a Ball-carrier breaks more
+    tackles, a Playmaker makes fewer handling errors, Crash/Distributor narrow or
+    widen the run — set via a Duty column in the squad view. **Opposition plans**
+    in the tactics drawer (rush their 10 / shut the channels / contest kicks /
+    target set piece), read by the defending side and mapped onto the matching
+    engine knob. *Still to do:* phase-split instructions, familiarity.
 - **M9 — Match-day presentation & in-match management.** Follow-ball camera/zoom;
   highlights/commentary/full view modes; broadcast overlays; live stats
   (possession, territory, an xPoints analogue); substitutions UI.
@@ -177,8 +184,12 @@ refactor everything else needs).
     reputation, facilities and a **university link**. An Academy screen shows each
     with low current-ability but a higher **potential** star rating; promote the
     ones you fancy into the senior squad to develop (`youth.ts`). Closes the loop
-    facilities → academy → talent. *Still to do:* U18/U20 squads, schools,
-    feeder clubs.
+    facilities → academy → talent.
+  - *Done (U18/U20):* a persisted **U18/U20 development squad** — send a graduate
+    there instead of straight up and they grow toward their ceiling markedly
+    faster (~14 vs ~9 CA/yr), graduating automatically at 20; promote them to the
+    seniors whenever they're ready (`developAcademy` in `youth.ts`). *Still to do:*
+    schools, feeder clubs.
 - **M13 — Competitions & game world.** Full Swedish pyramid + promotion/relegation,
   cups, Grand Final, Nordic Cup, Sevens series; then Denmark/Norway/Germany/USA
   leagues; women's rugby; national-team management.
@@ -214,13 +225,16 @@ refactor everything else needs).
     persisted. *Still to do:* job offers/interviews, coaching badges, journeyman.
 - **M15 — Media & reputation.** Local press conferences, interviews, social feed,
   news/rumours, reputation.
-  - *Done (press conferences):* a quick **pre-match presser** before each league
-    match — a context-aware question (favourite vs underdog) answered with a tone
-    (Confident / Measured / Defiant / Humble, or No comment). The fit of the
-    answer nudges squad morale, board approval and reputation (e.g. defiance lifts
-    underdogs but reads as arrogance when you're favourites); the outcome is filed
-    in the inbox (`media.ts`). *Still to do:* post-match interviews, rumours, a
-    social feed.
+  - *Done (social media):* there's **no press corps at this level**, so it all
+    plays out on social media. Your **matchday and full-time statements** post to
+    the **club's social page** — a context/result-aware prompt answered with a tone
+    (Confident / Measured / Defiant / Humble, or Don't post); the fit nudges squad
+    morale, board approval and reputation and is filed in the inbox. **Players sound
+    off themselves online** (no rumour-mill): the player linked with a move, their
+    team-mates backing or needling them, and rivals having their say — voiced with
+    real squad names (`playerSocial` in `media.ts`), dropped into the inbox about
+    every other round and at each rollover. *Still to do:* a richer reputation
+    model.
 - **M16 — Interface, tools & meta.** Portal/hub + bookmarks, search + a
   "RugbyPedia" glossary, inbox/news, data hub + comparison tools, calendar;
   modding / custom DB; holiday / instant-result.
@@ -228,8 +242,14 @@ refactor everything else needs).
     headlines — match results (with man of the match), signings, new sponsors,
     facility upgrades, season summaries, promotion/relegation, Grand Final and
     Sevens outcomes — each dated by year/round, newest first, persisted across
-    reloads (`logNews`/news view). *Still to do:* search, RugbyPedia, data hub,
-    calendar, modding.
+    reloads (`logNews`/news view).
+  - *Done (RugbyPedia / comparison / calendar):* three reference & data-hub
+    screens off the season hub — a **RugbyPedia** glossary (positions, attributes,
+    tactics, duties, set-piece calls; `data/pedia.ts`), a **player comparison**
+    view (any two of your players, all 12 attributes as mirrored bars with the
+    higher highlighted), and a **season calendar** (every round with your
+    fixture/result, "next up", and milestones — Sevens window, season finale).
+    *Still to do:* search, modding / custom DB, holiday / instant-result.
 
 ## Someday-maybe (not scoped)
 
