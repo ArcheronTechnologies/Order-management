@@ -1174,9 +1174,12 @@ export class Match {
     const sp = this.setPiece!;
     const throwIn = sp.putIn;
     const def = this.opp(throwIn);
+    // a recognised lineout caller/jumper on the field steadies the throwing side
+    const leaderOn = this.side(throwIn).some((p) => p.isLineoutLeader);
     const edge =
       this.packPower(throwIn, "lineoutJump") - this.packPower(def, "lineoutJump") +
-      (this.hookerThrow(throwIn) - 10) * 0.5;
+      (this.hookerThrow(throwIn) - 10) * 0.5 +
+      (leaderOn ? 4 : 0);
     const winP = clamp(0.82 + edge / 70, 0.5, 0.96);
     let winner = throwIn;
     if (!this.rng.chance(winP)) {
@@ -1332,6 +1335,10 @@ export class Match {
     return dist(p.x, p.y, this.nearestOf(this.opp(p.side), p.x, p.y).x, this.nearestOf(this.opp(p.side), p.x, p.y).y);
   }
   private bestKicker(side: Side): Player {
-    return this.side(side).reduce((a, b) => (b.attr.kicking > a.attr.kicking ? b : a));
+    const onPitch = this.side(side);
+    // the designated goal-kicker takes it if they're on the field
+    const nominated = onPitch.find((p) => p.isGoalKicker);
+    if (nominated) return nominated;
+    return onPitch.reduce((a, b) => (b.attr.kicking > a.attr.kicking ? b : a));
   }
 }

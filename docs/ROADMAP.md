@@ -63,6 +63,11 @@ refactor everything else needs).
     `Match.talkBoost`). **Game-time unhappiness**: starters lift, fit players
     left out stew — the ambitious & big-ego most of all — surfaced as
     dressing-room concerns (`applySelectionMorale`/`squadConcerns`).
+  - *Started:* **squad roles** — captain (natural leader), goal-kicker and
+    lineout caller, auto-assigned and editable from the squad screen. They feed
+    the match: the goal-kicker takes the kicks at goal, a lineout caller on the
+    field steadies the throw, and a strong captain makes team talks land harder
+    (`teams.assignRoles`/`leadershipScore`/`setRole`, `Match.bestKicker`).
 - **M8 — Deeper tactics & set-piece creator.** Roles & duties per position;
   in-possession / transition / out-of-possession instructions; opposition
   instructions; familiarity; a set-piece creator; shouts & mentality.

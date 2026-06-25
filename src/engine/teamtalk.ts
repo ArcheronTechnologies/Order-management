@@ -126,10 +126,16 @@ export function deliverTalk(squad: Player[], tone: TalkTone, ctx: TalkContext): 
   // pre/half talks are to the team that takes the field; full-time to everyone
   const audience = ctx.phase === "full" ? squad : squad.filter((p) => p.onField);
   const list = audience.length ? audience : squad;
+  // a strong captain in the room makes the manager's message land harder
+  const captain = list.find((p) => p.isCaptain);
+  const lead = captain
+    ? (captain.hidden.determination + captain.hidden.professionalism + captain.person.sociability - 24) / 36
+    : 0;
+  const amp = 1 + Math.max(-0.1, Math.min(0.3, lead)); // 0.9..1.3
   const reactions: PlayerReaction[] = [];
   let sum = 0;
   for (const p of list) {
-    const fit = reactionFit(p, tone, ctx);
+    const fit = reactionFit(p, tone, ctx) * amp;
     const delta = Math.round(fit * 5 * 10) / 10;
     p.condition.morale = clampMorale(p.condition.morale + delta);
     reactions.push({ player: p, mood: moodFor(delta), delta });

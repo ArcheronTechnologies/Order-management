@@ -331,5 +331,56 @@ export function buildSquad(
     if (p.studentYearsLeft) continue; // students arrive keen
     p.condition.morale = Math.max(20, Math.min(95, Math.round(moraleBase + rng.range(-10, 10))));
   }
+  assignRoles(squad);
   return squad;
+}
+
+/** Natural leadership: experience, drive and standing in the group. */
+export function leadershipScore(p: Player): number {
+  const personaBonus =
+    p.person.personality === "Charismatic Leader" ? 8 :
+    p.person.personality === "Club Loyalist" || p.person.personality === "Iron-Willed" ? 5 :
+    p.person.personality === "Model Professional" || p.person.personality === "Strict Professional" ? 4 :
+    p.person.personality === "Volatile" || p.person.personality === "Unreliable" ? -6 : 0;
+  return (
+    p.hidden.determination * 2 +
+    p.hidden.professionalism +
+    p.person.loyalty +
+    p.person.sociability * 0.5 +
+    Math.min(8, Math.max(0, p.age - 22)) + // a few years' standing
+    personaBonus
+  );
+}
+
+/**
+ * Pick sensible default squad roles. Captain = the natural leader; goal-kicker =
+ * the best off the tee; lineout leader = the best jumper in the pack. The user
+ * can override their own club's choices from the squad screen.
+ */
+export function assignRoles(squad: Player[]): void {
+  for (const p of squad) {
+    p.isCaptain = false;
+    p.isGoalKicker = false;
+    p.isLineoutLeader = false;
+  }
+  if (!squad.length) return;
+  const captain = squad.reduce((a, b) => (leadershipScore(b) > leadershipScore(a) ? b : a));
+  captain.isCaptain = true;
+  const kicker = squad.reduce((a, b) => (b.attr.kicking > a.attr.kicking ? b : a));
+  kicker.isGoalKicker = true;
+  const fwds = squad.filter((p) => p.forward);
+  if (fwds.length) {
+    fwds.reduce((a, b) => (b.attr.lineoutJump > a.attr.lineoutJump ? b : a)).isLineoutLeader = true;
+  }
+}
+
+/** Re-point a single role at a chosen player (clears the previous holder). */
+export function setRole(
+  squad: Player[],
+  role: "isCaptain" | "isGoalKicker" | "isLineoutLeader",
+  playerId: number
+): void {
+  for (const p of squad) p[role] = false;
+  const p = squad.find((q) => q.id === playerId);
+  if (p) p[role] = true;
 }

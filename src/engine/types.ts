@@ -82,6 +82,10 @@ export interface Player {
   hidden: HiddenAttributes;
   person: PersonProfile;
   condition: Condition;
+  /** squad roles — set per club, persist across the season. */
+  isCaptain?: boolean;
+  isGoalKicker?: boolean;
+  isLineoutLeader?: boolean;
   /** true while on the pitch (false on the bench). */
   onField: boolean;
 

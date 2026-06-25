@@ -6,7 +6,8 @@ import { PRESETS, type TeamTactics } from "./engine/tactics";
 import { Season, quickSim, type Fixture } from "./engine/season";
 import { Rng } from "./engine/rng";
 import type { Team } from "./engine/teams";
-import { UNION_POSITIONS } from "./engine/teams";
+import { UNION_POSITIONS, setRole } from "./engine/teams";
+import type { Player } from "./engine/types";
 import {
   rollAvailability,
   autoSelect,
@@ -169,12 +170,30 @@ function showTeamTalk(phase: TalkPhase): Promise<void> {
 
 const squadBody = $("squadBody");
 const squadClub = $("squadClub");
+const roleCaptain = $("roleCaptain") as HTMLSelectElement;
+const roleKicker = $("roleKicker") as HTMLSelectElement;
+const roleLineout = $("roleLineout") as HTMLSelectElement;
+
+function roleBadges(p: Player): string {
+  const b: string[] = [];
+  if (p.isCaptain) b.push(`<span class="role-badge cap" title="Captain">C</span>`);
+  if (p.isGoalKicker) b.push(`<span class="role-badge gk" title="Goal-kicker">GK</span>`);
+  if (p.isLineoutLeader) b.push(`<span class="role-badge ll" title="Lineout caller">LO</span>`);
+  return b.join("");
+}
+
+function fillRoleSelect(sel: HTMLSelectElement, roster: Player[], flag: keyof Player, forwardsOnly = false) {
+  const pool = forwardsOnly ? roster.filter((p) => p.forward) : roster;
+  sel.innerHTML = pool
+    .map((p) => `<option value="${p.id}"${p[flag] ? " selected" : ""}>${p.position.short} · ${p.name}</option>`)
+    .join("");
+}
+
 function renderSquad() {
   if (!season) return;
+  const live = season.rosterFor(season.userClub);
   squadClub.textContent = season.userClub.name;
-  const roster = [...season.rosterFor(season.userClub)].sort(
-    (a, b) => a.position.number - b.position.number
-  );
+  const roster = [...live].sort((a, b) => a.position.number - b.position.number);
   squadBody.innerHTML = roster
     .map((p) => {
       const a = p.attr;
@@ -185,7 +204,7 @@ function renderSquad() {
           : "";
       return `<tr${p.studentYearsLeft ? ' class="is-student"' : ""}>
         <td class="club">${p.position.short}</td>
-        <td class="club"><span class="full" style="color:var(--text)">${p.name}</span>${tag}</td>
+        <td class="club"><span class="full" style="color:var(--text)">${p.name}</span>${roleBadges(p)}${tag}</td>
         <td>${p.age}</td>
         <td>${a.strength}</td><td>${a.pace}</td><td>${a.handling}</td><td>${a.tackling}</td><td>${a.kicking}</td>
         <td>${p.hidden.currentAbility}</td><td>${p.hidden.potentialAbility}</td>
@@ -194,8 +213,22 @@ function renderSquad() {
       </tr>`;
     })
     .join("");
+  fillRoleSelect(roleCaptain, roster, "isCaptain");
+  fillRoleSelect(roleKicker, roster, "isGoalKicker");
+  fillRoleSelect(roleLineout, roster, "isLineoutLeader", true);
   showView("squad");
 }
+
+function onRoleChange(sel: HTMLSelectElement, role: "isCaptain" | "isGoalKicker" | "isLineoutLeader") {
+  if (!season) return;
+  setRole(season.rosterFor(season.userClub), role, Number(sel.value));
+  save();
+  renderSquad();
+}
+roleCaptain.addEventListener("change", () => onRoleChange(roleCaptain, "isCaptain"));
+roleKicker.addEventListener("change", () => onRoleChange(roleKicker, "isGoalKicker"));
+roleLineout.addEventListener("change", () => onRoleChange(roleLineout, "isLineoutLeader"));
+
 $("squadBtn").addEventListener("click", renderSquad);
 $("squadBack").addEventListener("click", () => renderSeason());
 
@@ -220,6 +253,12 @@ function save() {
       Math.round(p.condition.morale),
       p.condition.injuredWeeks,
     ]),
+    // your chosen squad roles (ids are stable as rosters regenerate from seed)
+    roles: {
+      c: season.rosterFor(season.userClub).find((p) => p.isCaptain)?.id,
+      gk: season.rosterFor(season.userClub).find((p) => p.isGoalKicker)?.id,
+      ll: season.rosterFor(season.userClub).find((p) => p.isLineoutLeader)?.id,
+    },
   };
   localStorage.setItem(SAVE_KEY, JSON.stringify(data));
 }
@@ -244,6 +283,12 @@ function load(): boolean {
       d.condition.forEach((c: number[], i: number) => {
         if (roster[i]) roster[i].condition = { fitness: c[0], sharpness: c[1], morale: c[2], injuredWeeks: c[3] };
       });
+    }
+    if (d.roles) {
+      const roster = season.rosterFor(user);
+      if (d.roles.c != null) setRole(roster, "isCaptain", d.roles.c);
+      if (d.roles.gk != null) setRole(roster, "isGoalKicker", d.roles.gk);
+      if (d.roles.ll != null) setRole(roster, "isLineoutLeader", d.roles.ll);
     }
     return true;
   } catch {
