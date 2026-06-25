@@ -21,6 +21,23 @@ export const CLUBS: Team[] = [
   { name: "Pingvin RC", short: "PIN", city: "Trelleborg", tier: "allsvenskan", region: "south", rating: 12, reputation: 59, facilities: 2, colors: { primary: "#0a0a0a", secondary: "#ffffff" } },
   { name: "Vänersborgs RK", short: "VAN", city: "Vänersborg", tier: "allsvenskan", region: "south", rating: 12, reputation: 57, facilities: 2, colors: { primary: "#2e7d32", secondary: "#ffffff" } },
   { name: "Spartacus RC", short: "SPA", city: "Partille", tier: "allsvenskan", region: "south", rating: 11, reputation: 53, facilities: 2, colors: { primary: "#c62828", secondary: "#0a0a0a" } },
+
+  // ===== Division 1 (tier below the Allsvenskan) =====
+  // --- North ---
+  { name: "Attila RK", short: "ATT", city: "Norrköping", tier: "div1", region: "north", rating: 11, reputation: 48, facilities: 3, colors: { primary: "#0a3d62", secondary: "#f6b93b" } },
+  { name: "Örebro RK", short: "ORE", city: "Örebro", tier: "div1", region: "north", rating: 10, reputation: 44, facilities: 2, colors: { primary: "#000000", secondary: "#e6b800" } },
+  { name: "Västerås RK", short: "VST", city: "Västerås", tier: "div1", region: "north", rating: 10, reputation: 41, facilities: 2, colors: { primary: "#005bac", secondary: "#ffffff" } },
+  { name: "Linköping RK", short: "LIN", city: "Linköping", tier: "div1", region: "north", rating: 9, reputation: 39, facilities: 2, university: true, colors: { primary: "#1b5e20", secondary: "#cddc39" } },
+  { name: "Gävle RK", short: "GAV", city: "Gävle", tier: "div1", region: "north", rating: 9, reputation: 35, facilities: 1, colors: { primary: "#8e24aa", secondary: "#ffffff" } },
+  { name: "Södertälje RK", short: "SOD", city: "Södertälje", tier: "div1", region: "north", rating: 8, reputation: 31, facilities: 1, colors: { primary: "#d84315", secondary: "#0a0a0a" } },
+
+  // --- South ---
+  { name: "Trojan RC", short: "TRO", city: "Kungsbacka", tier: "div1", region: "south", rating: 11, reputation: 47, facilities: 3, colors: { primary: "#283593", secondary: "#c62828" } },
+  { name: "Halmstad RK", short: "HMS", city: "Halmstad", tier: "div1", region: "south", rating: 10, reputation: 43, facilities: 2, colors: { primary: "#0277bd", secondary: "#ffeb3b" } },
+  { name: "Jönköping RK", short: "JON", city: "Jönköping", tier: "div1", region: "south", rating: 10, reputation: 40, facilities: 2, university: true, colors: { primary: "#00695c", secondary: "#ffffff" } },
+  { name: "Helsingborg RK", short: "HBG", city: "Helsingborg", tier: "div1", region: "south", rating: 9, reputation: 37, facilities: 2, colors: { primary: "#c2185b", secondary: "#0a0a0a" } },
+  { name: "Kalmar RK", short: "KAL", city: "Kalmar", tier: "div1", region: "south", rating: 9, reputation: 34, facilities: 1, colors: { primary: "#ef6c00", secondary: "#1b5e20" } },
+  { name: "Borås RK", short: "BOR", city: "Borås", tier: "div1", region: "south", rating: 8, reputation: 30, facilities: 1, colors: { primary: "#4527a0", secondary: "#ffd600" } },
 ];
 
 export function clubByShort(short: string): Team | undefined {

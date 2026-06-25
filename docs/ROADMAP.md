@@ -122,7 +122,18 @@ refactor everything else needs).
     champion (winning it lifts squad morale & reputation). The 7s match engine
     was rebalanced — far more open space, decisive clean breaks — so games are
     high-scoring and competitive (`sevens.ts`, sevens-gated engine tuning).
-    *Still to do:* the pyramid, promotion/relegation, Grand Final, other nations.
+  - *Done (pyramid):* a **two-tier, 24-club pyramid with promotion/relegation**.
+    Added a **Division 1** (12 clubs, 6 N + 6 S) below the Allsvenskan; you can
+    start in either tier and climb. Each year the **whole pyramid moves** (living
+    world): per region the Allsvenskan bottom is auto-relegated, the Division 1
+    champion auto-promoted, and the Allsvenskan 5th meets the Division 1 runner-up
+    in a **playoff you play** (or sim if you're not in it). Per-club tier &
+    reputation now persist for all 24 clubs (`tiers`/`repState` in saves);
+    `divisionFor` filters by region + current tier; standings for the divisions
+    you don't play are quick-simmed (`season.simStandings`). Club picker grouped
+    by tier; season header shows your division; end-of-season banner spells out
+    your fate and a pyramid summary lists who went up/down.
+    *Still to do:* Grand Final, Nordic Cup, other nations, women's rugby.
 - **M14 — Manager & career meta.** Manager creator, backstory, coaching badges,
   job offers/interviews, journeyman, career history.
 - **M15 — Media & reputation.** Local press conferences, interviews, social feed,

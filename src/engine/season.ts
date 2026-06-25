@@ -222,6 +222,35 @@ export class Season {
 }
 
 /**
+ * Rank a set of clubs by a quick-simmed double round-robin (no rosters needed) —
+ * used to resolve the divisions the user isn't playing, for promotion/relegation.
+ */
+export function simStandings(clubs: Team[], rng: Rng): Team[] {
+  const row = new Map<Team, { pts: number; pd: number; pf: number }>();
+  for (const c of clubs) row.set(c, { pts: 0, pd: 0, pf: 0 });
+  for (let i = 0; i < clubs.length; i++) {
+    for (let j = 0; j < clubs.length; j++) {
+      if (i === j) continue;
+      const home = clubs[i], away = clubs[j];
+      const r = quickSim(home, away, rng);
+      const h = row.get(home)!, a = row.get(away)!;
+      h.pf += r.hs; a.pf += r.as;
+      h.pd += r.hs - r.as; a.pd += r.as - r.hs;
+      const margin = r.hs - r.as;
+      if (margin > 0) { h.pts += 4; if (margin <= 7) a.pts += 1; }
+      else if (margin < 0) { a.pts += 4; if (-margin <= 7) h.pts += 1; }
+      else { h.pts += 2; a.pts += 2; }
+      if (r.ht >= 4) h.pts += 1;
+      if (r.at >= 4) a.pts += 1;
+    }
+  }
+  return [...clubs].sort((x, y) => {
+    const rx = row.get(x)!, ry = row.get(y)!;
+    return ry.pts - rx.pts || ry.pd - rx.pd || ry.pf - rx.pf || x.name.localeCompare(y.name);
+  });
+}
+
+/**
  * Quick statistical result for AI-vs-AI fixtures (instant, deterministic per
  * seed) — calibrated to the match engine's feel (~25-35 pts, a few tries each),
  * with a home edge and strength-driven expected scores.

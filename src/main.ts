@@ -3,7 +3,7 @@ import { Match } from "./engine/match";
 import { Renderer } from "./render/renderer";
 import { CLUBS } from "./data/clubs";
 import { PRESETS, type TeamTactics } from "./engine/tactics";
-import { Season, quickSim, type Fixture } from "./engine/season";
+import { Season, quickSim, simStandings, type Fixture } from "./engine/season";
 import { FORMATS } from "./engine/formats";
 import { Rng } from "./engine/rng";
 import type { Team } from "./engine/teams";
@@ -104,6 +104,25 @@ let lastHalf = 1; // to detect the half-time break for a talk
 let lastSnubs: Snub[] = []; // fringe players unhappy at being left out last match
 let lastMom: PlayerRating | null = null; // man of the match (either side)
 let lastRatings: PlayerRating[] = []; // your XV's ratings last match
+// the living pyramid: current tier & reputation per club short, for ALL 24 clubs,
+// evolving year on year (promotion/relegation move clubs between tiers).
+let tiers: Record<string, "allsvenskan" | "div1"> = {};
+let repState: Record<string, number> = {};
+function currentTier(club: Team): "allsvenskan" | "div1" {
+  return tiers[club.short] ?? club.tier;
+}
+function resetWorld() {
+  tiers = {};
+  repState = {};
+  for (const c of CLUBS) {
+    tiers[c.short] = c.tier;
+    repState[c.short] = c.reputation;
+  }
+}
+function divisionLabel(club: Team): string {
+  const t = currentTier(club) === "allsvenskan" ? "Allsvenskan" : "Division 1";
+  return `${t} ${club.region === "north" ? "North" : "South"}`;
+}
 
 const tacticsPanel = createTacticsPanel((t) => {
   userTactics = t;
@@ -336,12 +355,15 @@ $("squadBack").addEventListener("click", () => renderSeason());
 const SAVE_KEY = "flyhalf.career.v1";
 function save() {
   if (!season) return;
+  // fold the current division's live reputation back into the world-wide map
+  Object.assign(repState, season.reputationState());
   const data = {
     userShort: season.userClub.short,
     seed: seasonSeed,
     round: season.round,
     year: season.year,
-    reputation: season.reputationState(),
+    reputation: repState, // all 24 clubs
+    tiers,
     tactics: userTactics,
     results: season.fixtures
       .filter((f) => f.played)
@@ -361,11 +383,16 @@ function load(): boolean {
     const user = CLUBS.find((c) => c.short === d.userShort);
     if (!user) return false;
     seasonSeed = d.seed;
+    // restore the living-pyramid state BEFORE building the division (divisionFor
+    // depends on the current tiers); fall back to club defaults for old saves
+    resetWorld();
+    if (d.tiers) Object.assign(tiers, d.tiers);
+    if (d.reputation) Object.assign(repState, d.reputation);
     // carry the saved persistent squad so years of development survive a reload
     const carry = Array.isArray(d.roster)
       ? new Map<Team, Player[]>([[user, d.roster.map(deserializePlayer)]])
       : undefined;
-    season = new Season(divisionFor(user), user, seasonSeed, { reputation: d.reputation, year: d.year }, carry);
+    season = new Season(divisionFor(user), user, seasonSeed, { reputation: repState, year: d.year }, carry);
     season.round = d.round;
     userTactics = d.tactics ?? { ...PRESETS[0].tactics };
     trainingPlan = d.training ?? { ...DEFAULT_TRAINING };
@@ -394,27 +421,37 @@ function load(): boolean {
 
 // ====================== career setup =====================================
 function divisionFor(club: Team): Team[] {
-  return CLUBS.filter((c) => c.region === club.region);
+  return CLUBS.filter((c) => c.region === club.region && currentTier(c) === currentTier(club));
 }
 
 function renderClubPicker() {
   clubGrid.innerHTML = "";
-  for (const club of CLUBS) {
-    const card = document.createElement("button");
-    card.className = "club-card";
-    card.style.setProperty("--club", club.colors.primary);
-    card.innerHTML = `
-      <span class="badge" style="background:${club.colors.primary};border-color:${club.colors.secondary}"></span>
-      <span class="club-name">${club.name}</span>
-      <span class="club-meta">${club.city} · ${club.region === "north" ? "North" : "South"} · rep ${club.reputation}${club.university ? " · 🎓 uni" : ""}</span>`;
-    card.addEventListener("click", () => startCareer(club));
-    clubGrid.appendChild(card);
+  for (const tier of ["allsvenskan", "div1"] as const) {
+    const heading = document.createElement("h3");
+    heading.className = "picker-tier";
+    heading.textContent = tier === "allsvenskan" ? "Allsvenskan (top tier)" : "Division 1";
+    clubGrid.appendChild(heading);
+    const grid = document.createElement("div");
+    grid.className = "club-grid-inner";
+    for (const club of CLUBS.filter((c) => c.tier === tier)) {
+      const card = document.createElement("button");
+      card.className = "club-card";
+      card.style.setProperty("--club", club.colors.primary);
+      card.innerHTML = `
+        <span class="badge" style="background:${club.colors.primary};border-color:${club.colors.secondary}"></span>
+        <span class="club-name">${club.name}</span>
+        <span class="club-meta">${club.city} · ${club.region === "north" ? "North" : "South"} · rep ${club.reputation}${club.university ? " · 🎓 uni" : ""}</span>`;
+      card.addEventListener("click", () => startCareer(club));
+      grid.appendChild(card);
+    }
+    clubGrid.appendChild(grid);
   }
 }
 
 function startCareer(club: Team) {
   seasonSeed = (Date.now() & 0xffffff) || 1;
-  season = new Season(divisionFor(club), club, seasonSeed);
+  resetWorld();
+  season = new Season(divisionFor(club), club, seasonSeed, { reputation: repState });
   userTactics = { ...PRESETS[0].tactics };
   trainingPlan = { ...DEFAULT_TRAINING };
   lastTraining = null;
@@ -426,12 +463,18 @@ function startCareer(club: Team) {
 }
 
 // ====================== season hub =======================================
+function ordinal(n: number): string {
+  const s = ["th", "st", "nd", "rd"], v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
 function renderDressingRoom() {
   if (!season) {
     dressingRoomNote.classList.add("hidden");
     return;
   }
   const parts: string[] = [];
+  // promotion/relegation news from the rollover just gone
+  if (lastRolloverSummary) parts.push(`🪜 ${lastRolloverSummary}`);
   // pre-season development summary (shown the first view of a new year)
   if (lastDev && (lastDev.retirements.length || lastDev.departures.length || lastDev.intake.length || lastDev.risers.length)) {
     const seg: string[] = [];
@@ -483,7 +526,7 @@ function renderDressingRoom() {
 function renderSeason() {
   if (!season) return;
   showView("season");
-  seasonClub.textContent = `${season.userClub.name} · rep ${Math.round(season.repOf(season.userClub))}`;
+  seasonClub.textContent = `${season.userClub.name} · ${divisionLabel(season.userClub)} · rep ${Math.round(season.repOf(season.userClub))}`;
   championBanner.classList.add("hidden");
   syncTrainingControls();
   renderDressingRoom();
@@ -507,10 +550,19 @@ function renderSeason() {
     seasonRound.textContent = `Year ${season.year} — complete`;
     championBanner.classList.remove("hidden");
     const myRep = Math.round(season.repOf(season.userClub));
+    // where the user finished, and what it means for promotion/relegation
+    const pos = season.table().findIndex((r) => r.team === season!.userClub) + 1;
+    const top = currentTier(season.userClub) === "allsvenskan";
+    let fate = "";
+    if (top && pos === 6) fate = " You're <strong>relegated</strong> to Division 1.";
+    else if (top && pos === 5) fate = " Into a <strong>relegation playoff</strong>.";
+    else if (!top && pos === 1) fate = " <strong>Promoted</strong> to the Allsvenskan!";
+    else if (!top && pos === 2) fate = " Into a <strong>promotion playoff</strong>.";
     championBanner.innerHTML =
       (champ === season.userClub
-        ? `🏆 <strong>Champions!</strong> ${champ.name} win the league.`
-        : `Season over — <strong>${champ.name}</strong> are champions.`) +
+        ? `🏆 <strong>Champions!</strong> ${champ.name} win ${divisionLabel(season.userClub)}.`
+        : `Season over — <strong>${champ.name}</strong> win ${divisionLabel(season.userClub)}. You finished ${ordinal(pos)}.`) +
+      fate +
       `<span class="rep-note"> Your reputation: ${myRep}/100</span>`;
     fixturesTitle.textContent = "Final standings";
     fixturesList.innerHTML = "";
@@ -566,18 +618,135 @@ playRoundBtn.addEventListener("click", () => {
 });
 
 let lastDev: SeasonDevelopment | null = null; // pre-season changes, surfaced in the season view
+let lastRolloverSummary: string | null = null; // promotion/relegation news for the note
+let pendingRolloverYear = 0; // year being rolled into (set while a playoff is pending)
+let playoffTie: { a: Team; b: Team } | null = null; // a = Allsvenskan 5th, b = Div1 2nd
+
+function clubsIn(region: "north" | "south", tier: "allsvenskan" | "div1"): Team[] {
+  return CLUBS.filter((c) => c.region === region && currentTier(c) === tier);
+}
+/** Standings for a division: the real table if it's the user's, else quick-simmed. */
+function divisionStandings(region: "north" | "south", tier: "allsvenskan" | "div1", rng: Rng): Team[] {
+  const clubs = clubsIn(region, tier);
+  if (season && season.userClub.region === region && currentTier(season.userClub) === tier) {
+    return season.table().map((r) => r.team);
+  }
+  return simStandings(clubs, rng);
+}
+function setTier(club: Team, tier: "allsvenskan" | "div1") {
+  const was = currentTier(club);
+  tiers[club.short] = tier;
+  if (was !== tier) {
+    const delta = tier === "allsvenskan" ? 3 : -3; // going up lifts standing, down dents it
+    repState[club.short] = Math.max(15, Math.min(100, (repState[club.short] ?? club.reputation) + delta));
+  }
+}
+
+/** End the league season: resolve promotion/relegation across the pyramid. */
 function startNextSeason() {
   if (!season) return;
   season.endSeasonReputation();
-  const reputation = season.reputationState();
-  const year = season.year + 1;
+  Object.assign(repState, season.reputationState());
+  pendingRolloverYear = season.year + 1;
+  const rng = new Rng((seasonSeed * 2654435761 + pendingRolloverYear) >>> 0);
+
+  // resolve every region: bottom of Allsvenskan auto-down, Div1 champ auto-up,
+  // Allsvenskan 5th vs Div1 2nd in a playoff (the user plays theirs).
+  const moves: string[] = [];
+  let userPlayoff: { a: Team; b: Team } | null = null;
+  for (const region of ["north", "south"] as const) {
+    const alls = divisionStandings(region, "allsvenskan", rng);
+    const div1 = divisionStandings(region, "div1", rng);
+    if (alls.length < 6 || div1.length < 6) continue;
+    setTier(alls[5], "div1"); // 6th relegated
+    setTier(div1[0], "allsvenskan"); // champion promoted
+    moves.push(`${div1[0].short} ↑, ${alls[5].short} ↓ (${region === "north" ? "N" : "S"})`);
+    const tie = { a: alls[4], b: div1[1] }; // 5th vs runner-up
+    if (tie.a === season.userClub || tie.b === season.userClub) userPlayoff = tie;
+    else resolvePlayoff(tie, simPlayoff(tie, rng), moves);
+  }
+  lastRolloverSummary = moves.length ? `Pyramid: ${moves.join(" · ")}.` : null;
+
+  if (userPlayoff) {
+    playoffTie = userPlayoff;
+    startPlayoffMatch(userPlayoff);
+  } else {
+    finalizeRollover();
+  }
+}
+
+/** Quick-sim a non-user playoff; returns the winning team. */
+function simPlayoff(tie: { a: Team; b: Team }, rng: Rng): Team {
+  const r = quickSim(tie.a, tie.b, rng);
+  return r.hs >= r.as ? tie.a : tie.b; // a (the incumbent) survives a draw
+}
+/** Apply a playoff outcome: winner in/stays Allsvenskan, loser in/stays Division 1. */
+function resolvePlayoff(tie: { a: Team; b: Team }, winner: Team, moves: string[]) {
+  const loser = winner === tie.a ? tie.b : tie.a;
+  setTier(winner, "allsvenskan");
+  setTier(loser, "div1");
+  moves.push(`playoff: ${winner.short} stays up, ${loser.short} down`);
+}
+
+function startPlayoffMatch(tie: { a: Team; b: Team }) {
+  if (!season) return;
   const user = season.userClub;
-  // roll the user's squad forward a year: develop/age, retire, intake
-  const devRng = new Rng((seasonSeed * 2654435761 + year) >>> 0);
-  lastDev = developSquad(season.rosterFor(user), devRng, user, reputation[user.short] ?? user.reputation);
+  const seed = (seasonSeed * 149 + 17) >>> 0;
+  const userIsA = tie.a === user;
+  const userRoster = season.rosterFor(user);
+  const av = rollAvailability(userRoster, seed, repState[user.short] ?? user.reputation);
+  autoSelect(userRoster, new Set(av.filter((x) => x.available).map((x) => x.player.id)));
+  const opp = userIsA ? tie.b : tie.a;
+  const oppRoster = buildSquad(new Rng((seed * 7 + 1) >>> 0), opp, userIsA ? "away" : "home", FORMATS.union, undefined, repState[opp.short] ?? opp.reputation);
+  userSide = userIsA ? "home" : "away";
+  currentFixture = null;
+  match = new Match(seed, "union", tie.a, tie.b, {
+    homeTactics: userIsA ? userTactics : { ...PRESETS[0].tactics },
+    awayTactics: userIsA ? { ...PRESETS[0].tactics } : userTactics,
+    homeSquad: userIsA ? userRoster : oppRoster,
+    awaySquad: userIsA ? oppRoster : userRoster,
+  });
+  renderedCommentary = 0;
+  eventsEl.innerHTML = "";
+  homeNameEl.textContent = tie.a.name;
+  awayNameEl.textContent = tie.b.name;
+  formatLabel.classList.add("hidden");
+  newBtn.classList.add("hidden");
+  simBtn.classList.remove("hidden");
+  subsBtn.classList.remove("hidden");
+  backToSeasonBtn.classList.remove("hidden");
+  backToSeasonBtn.textContent = "Playoff";
+  showView("match");
+  syncScoreboard();
+  renderer.resize();
+  renderer.draw(match);
+  setPlaying(true);
+}
+
+function finishPlayoffMatch() {
+  if (!playoffTie || !match) return;
+  const winner = match.score.home >= match.score.away ? playoffTie.a : playoffTie.b;
+  const moves: string[] = [];
+  resolvePlayoff(playoffTie, winner, moves);
+  lastRolloverSummary = (lastRolloverSummary ? lastRolloverSummary + " " : "") + moves.join(" ") + ".";
+  playoffTie = null;
+  simBtn.classList.add("hidden");
+  subsBtn.classList.add("hidden");
+  backToSeasonBtn.classList.add("hidden");
+  backToSeasonBtn.classList.remove("primary");
+  finalizeRollover();
+}
+
+/** Develop the user's squad and build the new season's division (post-movement). */
+function finalizeRollover() {
+  if (!season) return;
+  const user = season.userClub;
+  const year = pendingRolloverYear;
+  const devRng = new Rng((seasonSeed * 2654435761 + year * 31) >>> 0);
+  lastDev = developSquad(season.rosterFor(user), devRng, user, repState[user.short] ?? user.reputation);
   const carry = new Map<Team, Player[]>([[user, lastDev.roster]]);
   seasonSeed = (seasonSeed * 1103515245 + 12345) >>> 0;
-  season = new Season(divisionFor(user), user, seasonSeed, { reputation, year }, carry);
+  season = new Season(divisionFor(user), user, seasonSeed, { reputation: repState, year }, carry);
   lastSnubs = [];
   lastMom = null;
   lastRatings = [];
@@ -730,6 +899,7 @@ function finishUserMatch() {
   }
   lastSnubs = applySelectionMorale(season.rosterFor(season.userClub), won);
   lastDev = null; // pre-season summary clears once the season is under way
+  lastRolloverSummary = null;
   // your XV tire & risk knocks; then the whole league recovers a week
   applyPostMatch(season.rosterFor(season.userClub), (availSeed * 13 + 9) >>> 0);
   for (const c of season.clubs) applyWeeklyRecovery(season.rosterFor(c));
@@ -918,6 +1088,10 @@ sevensSimBtn.addEventListener("click", () => {
 
 backToSeasonBtn.addEventListener("click", () => {
   setPlaying(false);
+  if (playoffTie) {
+    if (match && match.finished) finishPlayoffMatch();
+    return; // a playoff must be seen through — no bailing out
+  }
   if (sevensTie) {
     if (match && match.finished) finishSevensMatch();
     else if (confirm("Leave this tie? It will be quick-simmed instead.")) {

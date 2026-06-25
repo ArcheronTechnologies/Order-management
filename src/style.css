@@ -269,12 +269,14 @@ html, body {
 .career-inner h1 { font-size: 30px; margin: 8px 0 0; }
 .career-inner h2 { font-size: 20px; margin: 22px 0 6px; }
 .career-inner .muted { color: var(--muted); max-width: 620px; line-height: 1.6; }
-.club-grid {
+.club-grid { margin-top: 18px; }
+.club-grid-inner {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
   gap: 12px;
-  margin-top: 18px;
+  margin-bottom: 18px;
 }
+.picker-tier { margin: 14px 2px 8px; font-size: 14px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; border-bottom: 1px solid var(--line); padding-bottom: 6px; }
 .club-card {
   display: flex;
   flex-direction: column;
