@@ -8,6 +8,16 @@ import { Rng } from "./engine/rng";
 import type { Team } from "./engine/teams";
 import { UNION_POSITIONS, setRole, serializePlayer, deserializePlayer } from "./engine/teams";
 import { developSquad, type SeasonDevelopment } from "./engine/development";
+import {
+  applyTraining,
+  DEFAULT_TRAINING,
+  INTENSITY_LABELS,
+  FOCUS_LABELS,
+  type TrainingPlan,
+  type TrainingIntensity,
+  type TrainingFocus,
+  type TrainingReport,
+} from "./engine/training";
 import type { Player } from "./engine/types";
 import {
   rollAvailability,
@@ -94,6 +104,38 @@ const tacticsPanel = createTacticsPanel((t) => {
 });
 tacticsBtn.addEventListener("click", tacticsPanel.open);
 $("openTacticsFromSeason").addEventListener("click", tacticsPanel.open);
+
+// ====================== training =========================================
+let trainingPlan: TrainingPlan = { ...DEFAULT_TRAINING };
+let lastTraining: TrainingReport | null = null;
+const trainIntensity = $("trainIntensity") as HTMLSelectElement;
+const trainFocus = $("trainFocus") as HTMLSelectElement;
+const trainHint = $("trainHint");
+trainIntensity.innerHTML = (Object.keys(INTENSITY_LABELS) as TrainingIntensity[])
+  .map((k) => `<option value="${k}">${INTENSITY_LABELS[k]}</option>`)
+  .join("");
+trainFocus.innerHTML = (Object.keys(FOCUS_LABELS) as TrainingFocus[])
+  .map((k) => `<option value="${k}">${FOCUS_LABELS[k]}</option>`)
+  .join("");
+function syncTrainingControls() {
+  trainIntensity.value = trainingPlan.intensity;
+  trainFocus.value = trainingPlan.focus;
+  trainHint.textContent =
+    trainingPlan.intensity === "hard"
+      ? "Faster gains — but tired legs and more knocks."
+      : trainingPlan.intensity === "light"
+        ? "Easy week — minimal gains, no risk."
+        : "A balanced week's work.";
+}
+trainIntensity.addEventListener("change", () => {
+  trainingPlan.intensity = trainIntensity.value as TrainingIntensity;
+  syncTrainingControls();
+  save();
+});
+trainFocus.addEventListener("change", () => {
+  trainingPlan.focus = trainFocus.value as TrainingFocus;
+  save();
+});
 
 // ====================== team talks =======================================
 const talkOverlay = $("talkOverlay");
@@ -247,6 +289,7 @@ function save() {
     results: season.fixtures
       .filter((f) => f.played)
       .map((f) => ({ r: f.round, h: f.home.short, a: f.away.short, hs: f.homeScore, as: f.awayScore, ht: f.homeTries, at: f.awayTries })),
+    training: trainingPlan,
     // your club's full squad — persistent players carry across years (dev/aging)
     roster: season.rosterFor(season.userClub).map(serializePlayer),
   };
@@ -268,6 +311,7 @@ function load(): boolean {
     season = new Season(divisionFor(user), user, seasonSeed, { reputation: d.reputation, year: d.year }, carry);
     season.round = d.round;
     userTactics = d.tactics ?? { ...PRESETS[0].tactics };
+    trainingPlan = d.training ?? { ...DEFAULT_TRAINING };
     for (const r of d.results ?? []) {
       const f = season.fixtures.find((x) => x.round === r.r && x.home.short === r.h && x.away.short === r.a);
       if (f) season.record(f, r.hs, r.as, r.ht, r.at);
@@ -315,6 +359,9 @@ function startCareer(club: Team) {
   seasonSeed = (Date.now() & 0xffffff) || 1;
   season = new Season(divisionFor(club), club, seasonSeed);
   userTactics = { ...PRESETS[0].tactics };
+  trainingPlan = { ...DEFAULT_TRAINING };
+  lastTraining = null;
+  lastDev = null;
   save();
   renderSeason();
 }
@@ -353,6 +400,13 @@ function renderDressingRoom() {
   if (concerns.length) {
     parts.push(`Low morale: ${concerns.slice(0, 4).map((p) => p.name).join(", ")}.`);
   }
+  if (lastTraining) {
+    const t = lastTraining;
+    const turnout = `${t.attended}/${t.squad} trained`;
+    const gain = t.topGainer ? `, ${t.topGainer.name} sharpest` : "";
+    const knock = t.knocks ? `, ${t.knocks} knock${t.knocks > 1 ? "s" : ""}` : "";
+    parts.push(`💪 ${turnout}${gain}${knock}.`);
+  }
   if (parts.length) {
     dressingRoomNote.innerHTML = parts.join(" ");
     dressingRoomNote.classList.remove("hidden");
@@ -366,6 +420,7 @@ function renderSeason() {
   showView("season");
   seasonClub.textContent = `${season.userClub.name} · rep ${Math.round(season.repOf(season.userClub))}`;
   championBanner.classList.add("hidden");
+  syncTrainingControls();
   renderDressingRoom();
 
   // table
@@ -603,6 +658,13 @@ function finishUserMatch() {
   // your XV tire & risk knocks; then the whole league recovers a week
   applyPostMatch(season.rosterFor(season.userClub), (availSeed * 13 + 9) >>> 0);
   for (const c of season.clubs) applyWeeklyRecovery(season.rosterFor(c));
+  // a week on the training paddock for your club (after recovery)
+  lastTraining = applyTraining(
+    season.rosterFor(season.userClub),
+    trainingPlan,
+    season.repOf(season.userClub),
+    new Rng((availSeed * 19 + season.round * 3) >>> 0)
+  );
   simRestOfRound(currentFixture);
   season.round++;
   currentFixture = null;

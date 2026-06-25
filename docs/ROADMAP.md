@@ -62,8 +62,14 @@ refactor everything else needs).
     students for uni clubs) tops the squad back to its reputation-scaled size.
     Visible attributes track ability changes; a pre-season summary shows
     retirements / departures / arrivals / risers (`development.ts`, full user
-    roster persisted in saves). *Still to do:* training schedules, individual
-    focuses, mentoring, coaches.
+    roster persisted in saves).
+  - *Done:* **in-season training** — a weekly plan (intensity light/normal/hard
+    × focus balanced/fitness/attack/defence/set-piece) nudges ability and the
+    focused attributes toward potential. Amateur-capped by **turnout**
+    (commitment + a low-reputation club struggling for numbers), so thin
+    sessions develop less; hard weeks gain more but tire legs and risk
+    training-ground knocks. Post-round report in the season note; plan persisted
+    (`training.ts`). *Still to do:* individual focuses, mentoring, coaching staff.
 - **M7 — Morale, squad dynamics & player interaction.** Morale/concerns/promises;
   hierarchy/social groups/leaders/dressing room; 1‑on‑1s & praise/criticism;
   captain / goal-kicker / set-piece taker; team talks.
