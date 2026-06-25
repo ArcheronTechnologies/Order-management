@@ -175,34 +175,52 @@ export class Match {
   }
 
   // --- formations ----------------------------------------------------------
-  private lineUp(side: Side, anchorX: number, attacking: boolean) {
-    const dir = attackDir(side);
-    const list = this.side(side);
-    const lineX = attacking
-      ? anchorX - dir * 6 // attackers stand behind the ball
-      : anchorX + dir * 8; // defenders form a line in front
-    list.forEach((p, i) => {
-      const lane = (i + 0.5) / list.length;
-      p.x = clamp(lineX, PITCH.inGoal, PITCH.inGoal + PITCH.fieldLength);
-      p.y = clamp(lane * PITCH.width, 2, PITCH.width - 2);
-    });
-  }
-
   private setupKickoff(receiving: Side) {
     const kicking = this.opp(receiving);
     this.possession = receiving;
     this.phaseCount = 0;
     this.beaten.clear();
-    // kicking team behind halfway, receiving team deeper in own half
-    this.lineUp(kicking, HALFWAY - attackDir(kicking) * 4, false);
-    this.lineUp(receiving, HALFWAY - attackDir(receiving) * 28, true);
+    const onPitch = (x: number) => clamp(x, PITCH.inGoal, PITCH.inGoal + PITCH.fieldLength);
+    const spreadY = (i: number, n: number, lo = 6, hi = PITCH.width - 6) =>
+      clamp(lo + (n > 1 ? (i / (n - 1)) * (hi - lo) : (hi - lo) / 2), 3, PITCH.width - 3);
+
+    // Kicking team: a chase line across the field just behind halfway, in a
+    // shallow arc (middle a touch forward), ready to sprint after the ball.
+    const kdir = attackDir(kicking);
+    const kf = this.side(kicking);
+    kf.forEach((p, i) => {
+      const frac = kf.length > 1 ? i / (kf.length - 1) : 0.5;
+      const arc = 1 - Math.abs(frac - 0.5) * 2; // 1 in the middle, 0 at the wings
+      p.x = onPitch(HALFWAY - kdir * (2 - arc * 1.5));
+      p.y = spreadY(i, kf.length, 4, PITCH.width - 4);
+    });
+
+    // Receiving team: real depth — forwards in a catch line, backs deeper, the
+    // fullback deepest and central (a receiving shape, not a column).
+    const rdir = attackDir(receiving);
+    const rfwd = this.side(receiving).filter((p) => p.forward);
+    const rbacks = this.side(receiving).filter((p) => !p.forward);
+    const fb = this.byRole(receiving, "FB");
+    rfwd.forEach((p, i) => {
+      p.x = onPitch(HALFWAY - rdir * this.rng.range(18, 24));
+      p.y = spreadY(i, rfwd.length, 12, PITCH.width - 12);
+    });
+    rbacks.forEach((p, i) => {
+      if (p === fb) return;
+      p.x = onPitch(HALFWAY - rdir * (30 + (i % 2) * 6));
+      p.y = spreadY(i, Math.max(1, rbacks.length - 1), 8, PITCH.width - 8);
+    });
+    if (fb) {
+      fb.x = onPitch(HALFWAY - rdir * 44);
+      fb.y = PITCH.width / 2;
+    }
+
     // launch the ball as a contestable kick toward the receivers
-    const dir = attackDir(kicking);
     this.ball.carrier = null;
     this.ball.x = HALFWAY;
     this.ball.y = PITCH.width / 2 + this.rng.range(-15, 15);
-    const targetX = HALFWAY + dir * this.rng.range(24, 34);
-    const targetY = clamp(this.ball.y + this.rng.range(-12, 12), 4, PITCH.width - 4);
+    const targetX = HALFWAY + kdir * this.rng.range(22, 32);
+    const targetY = clamp(this.ball.y + this.rng.range(-12, 12), 6, PITCH.width - 6);
     this.launchBall(targetX, targetY, KICK_SPEED * 0.7, true, null);
     this.phase = "flight";
     this.say(`${this.teamOf(kicking).short} kick off.`);
@@ -286,10 +304,22 @@ export class Match {
     this.ball.x += this.ball.vx * dt;
     this.ball.y += this.ball.vy * dt;
     this.ball.airTime -= dt;
-    // everyone drifts toward the ball's projected landing
+    // A kick is contested by the nearest man of each side; the kicking side
+    // sweeps up after it as a chase LINE (advancing, holding their lane) while
+    // the catching side mostly holds depth — so it reads like a kick chase, not
+    // 30 players collapsing onto a point.
+    const kickingSide = this.ball.thrownBy ? this.ball.thrownBy.side : this.opp(this.possession);
+    const catchingSide = this.opp(kickingSide);
+    const catcher = this.nearestOf(catchingSide, this.ball.x, this.ball.y);
+    const chaser = this.nearestOf(kickingSide, this.ball.x, this.ball.y);
     for (const p of this.players) {
-      const chase = this.speed(p) * (p.side === this.possession ? 1 : 0.95);
-      this.moveToward(p, this.ball.x, this.ball.y, chase, dt);
+      if (p === catcher || p === chaser) {
+        this.moveToward(p, this.ball.x, this.ball.y, this.speed(p), dt);
+      } else if (p.side === kickingSide) {
+        // advance after the kick as a line, holding width
+        this.moveToward(p, this.ball.x, p.y, this.speed(p) * 0.82, dt);
+      }
+      // catching side (besides the catcher) holds its receiving shape
     }
     if (this.ball.airTime <= 0 || this.ball.y <= 0 || this.ball.y >= PITCH.width) {
       this.ball.y = clamp(this.ball.y, 1, PITCH.width - 1);
@@ -328,22 +358,30 @@ export class Match {
         return;
       }
     }
-    // reset the defence after a kick or a change of hands, but not for a pass
-    // completed within the same team's attacking shape
+    // A pass completed within the same team keeps the phase's shape & play (the
+    // ball sweeps across the line). A kick or a change of hands starts afresh.
+    const samePhasePass = !this.ball.kicked && best.side === prevPossession;
     const reset = this.ball.kicked || best.side !== prevPossession;
-    this.enterOpen(best, reset);
+    this.enterOpen(best, reset, samePhasePass ? this.play : undefined, samePhasePass);
   }
 
-  /** Hand the ball to a carrier and start a fresh phase of open play. */
-  private enterOpen(carrier: Player, resetDefence = false, play?: Play) {
+  /**
+   * Hand the ball to a carrier and start a phase of open play. `keepAnchor` keeps
+   * the breakdown anchor and called play fixed — used when the ball is passed
+   * along the line within the same phase, so the formation holds and the ball
+   * sweeps across it rather than re-forming on each receiver.
+   */
+  private enterOpen(carrier: Player, resetDefence = false, play?: Play, keepAnchor = false) {
     this.ball.carrier = carrier;
     this.ball.x = carrier.x;
     this.ball.y = carrier.y;
-    this.openAnchorX = carrier.x; // anchors the defensive line for this phase
-    this.openAnchorY = carrier.y;
-    // attack the more open side of the field (the one with more room to the touch)
-    this.openSign = carrier.y < PITCH.width / 2 ? 1 : -1;
-    this.play = play ?? this.choosePlay(carrier.side);
+    if (!keepAnchor) {
+      this.openAnchorX = carrier.x; // anchors the defensive line for this phase
+      this.openAnchorY = carrier.y;
+      // attack the more open side of the field (more room to the touch)
+      this.openSign = carrier.y < PITCH.width / 2 ? 1 : -1;
+      this.play = play ?? this.choosePlay(carrier.side);
+    }
     this.ball.thrownBy = null;
     this.ball.kicked = false;
     this.phase = "open";
@@ -491,33 +529,50 @@ export class Match {
   }
 
   /**
-   * Position the attacking side in shape: scrum-half at the base, fly-half at
-   * first-receiver depth, the rest of the backs fanned out and back on the open
-   * side, and the forwards podded near the ruck as carry options.
+   * Position the attacking side in real rugby shape: scrum-half at the base,
+   * fly-half at first-receiver depth, the rest of the backs strung in a DIAGONAL
+   * backline that fans out to the open touchline (wider = deeper), and the
+   * forwards in tight PODS near the gain line as carry/clear-out options.
    */
   private positionAttack(att: Side, dir: number, exclude: Set<number>, dt: number) {
     const ax = this.openAnchorX;
     const ay = this.openAnchorY;
     const os = this.openSign;
+    const onX = (x: number) => clamp(x, PITCH.inGoal, PITCH.inGoal + PITCH.fieldLength);
+    const onY = (y: number) => clamp(y, 3, PITCH.width - 3);
     const sh = this.byRole(att, "SH");
     const fh = this.byRole(att, "FH");
     const mates = this.side(att).filter((p) => !exclude.has(p.id));
 
+    // Forwards form tight pods: the first pod just to the open side of the ruck
+    // at the gain line (carry option), a second pod a bit wider, any spare on
+    // the blindside. Within a pod players bind close and stagger a touch back.
     const fwds = mates.filter((p) => p.forward);
     fwds.forEach((p, i) => {
-      const podX = ax - dir * (1.5 + (i % 3) * 1.2); // close to the gain line
-      const podY = ay + os * (3 + i * 3.2);
-      this.moveToward(p, clamp(podX, PITCH.inGoal, PITCH.inGoal + PITCH.fieldLength), clamp(podY, 3, PITCH.width - 3), this.speed(p) * 0.8, dt);
+      const pod = Math.floor(i / 3);
+      const inPod = i % 3;
+      const podY = ay + os * (5 + pod * 13 + inPod * 2.3);
+      const podX = ax - dir * (1 + inPod * 0.9 + pod * 0.5);
+      this.moveToward(p, onX(podX), onY(podY), this.speed(p) * 0.8, dt);
     });
 
-    const spreadBacks = mates.filter((p) => !p.forward && p !== sh && p !== fh);
-    if (sh && !exclude.has(sh.id)) this.moveToward(sh, ax - dir * 2.5, clamp(ay, 3, PITCH.width - 3), this.speed(sh) * 0.85, dt);
-    if (fh && !exclude.has(fh.id)) this.moveToward(fh, ax - dir * 9, clamp(ay + os * 9, 3, PITCH.width - 3), this.speed(fh) * 0.85, dt);
-    spreadBacks.forEach((p, i) => {
-      const k = i + 1;
-      const tx = ax - dir * (8 + k * 1.4);
-      const ty = ay + os * (15 + k * 8);
-      this.moveToward(p, clamp(tx, PITCH.inGoal, PITCH.inGoal + PITCH.fieldLength), clamp(ty, 3, PITCH.width - 3), this.speed(p) * 0.8, dt);
+    // half-backs: 9 at the base, 10 at first-receiver depth a few metres open
+    if (sh && !exclude.has(sh.id)) this.moveToward(sh, onX(ax - dir * 2), onY(ay), this.speed(sh) * 0.9, dt);
+    if (fh && !exclude.has(fh.id)) this.moveToward(fh, onX(ax - dir * 9), onY(ay + os * 7), this.speed(fh) * 0.85, dt);
+
+    // backline: a diagonal stretching from just outside 10 to the open touch,
+    // each man wider and a touch deeper than the last so they run onto the ball
+    const backs = mates
+      .filter((p) => !p.forward && p !== sh && p !== fh)
+      .sort((a, b) => a.position.number - b.position.number);
+    const startY = ay + os * 15;
+    const endY = os > 0 ? PITCH.width - 6 : 6;
+    const n = backs.length;
+    backs.forEach((p, i) => {
+      const f = n > 1 ? i / (n - 1) : 0;
+      const ty = startY + (endY - startY) * f;
+      const depth = 10 + f * 6; // wider channels stand deeper (the diagonal)
+      this.moveToward(p, onX(ax - dir * depth), onY(ty), this.speed(p) * 0.8, dt);
     });
   }
 
@@ -684,6 +739,24 @@ export class Match {
       this.debug.kicks++;
       this.say(`${carrier.name} kicks for territory.`);
       return;
+    }
+
+    // On a wide play the inside men (9, 10, 12) move the ball on early — they
+    // draw their man and pass, so the ball sweeps through the hands across the
+    // backline before the outside backs attack the space.
+    const insideBack = carrier.position.short === "SH" || carrier.position.short === "FH" || carrier.position.short === "IC";
+    if (this.play === "wide" && insideBack && this.rng.chance(0.85)) {
+      const out = this.nextReceiver(carrier, att, dir);
+      if (out) {
+        if (this.rng.chance(clamp(0.04 + (12 - carrier.attr.handling) * 0.005, 0.02, 0.1))) {
+          this.say(`Forward pass, ${this.teamOf(att).short}. Scrum.`);
+          this.startScrum(def, carrier.x, carrier.y);
+          return;
+        }
+        this.launchBall(out.x, out.y, PASS_SPEED, false, carrier);
+        this.phase = "flight";
+        return;
+      }
     }
 
     // pass along the line. Wide plays move the ball through the hands readily;
