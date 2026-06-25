@@ -14,8 +14,19 @@ See `docs`/the plan for the full scope & roadmap.
 
 ## Status
 
-**Milestone 1 — match engine** ✅ and **Milestone 2 — match & tactics depth** (in
-progress). The match is a watchable, self-contained game of rugby:
+**Career mode** ✅ — pick a club and manage a full season:
+
+- Choose any of the real Allsvenskan clubs; you play a double round-robin against
+  the other sides **in your region** (North or South).
+- A live **league table** with rugby bonus points (try bonus, losing bonus),
+  **fixtures**, and a **champion** at the end of the season.
+- **Play your matches** (watch the dots with your tactics) or **Sim** them
+  instantly; the rest of the league is quick-simmed around you.
+- Your tactics and season **save automatically** (localStorage) and resume on
+  reload.
+
+**Match engine** ✅ and **match & tactics depth** ✅. The match itself is a
+watchable, self-contained game of rugby:
 
 - Real **Swedish clubs** (Allsvenskan) with procedurally generated squads of
   named, positioned players (1–15 / sevens roles) and **FM-style 1–20

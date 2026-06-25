@@ -24,11 +24,15 @@
               <option value="2" selected>2×</option>
               <option value="4">4×</option>
               <option value="8">8×</option>
+              <option value="16">16×</option>
+              <option value="30">30×</option>
             </select>
           </label>
           <button id="tacticsBtn">Tactics</button>
           <button id="playPause">Play</button>
+          <button id="simMatch" class="hidden">Sim ⏩</button>
           <button id="newMatch">New match</button>
+          <button id="backToSeason" class="hidden">‹ Season</button>
         </div>
       </header>
 
@@ -54,6 +58,44 @@
           <ul id="events"></ul>
         </aside>
       </main>
+    </div>
+
+    <div id="careerSetup" class="view hidden">
+      <div class="career-inner">
+        <h1>Fly-Half <span class="sub">rugby manager</span></h1>
+        <h2>Start your career</h2>
+        <p class="muted">Take charge of a club in the Swedish Allsvenskan. You'll play a
+          full season against the other sides in your region — pick your club.</p>
+        <div id="clubGrid" class="club-grid"></div>
+      </div>
+    </div>
+
+    <div id="seasonView" class="view hidden">
+      <header class="topbar">
+        <h1>Fly-Half <span class="sub" id="seasonClub">rugby manager</span></h1>
+        <div class="controls">
+          <span id="seasonRound" class="round-pill"></span>
+          <button id="openTacticsFromSeason">Tactics</button>
+          <button id="newCareer">New career</button>
+        </div>
+      </header>
+      <div id="championBanner" class="champion hidden"></div>
+      <div class="season-grid">
+        <section class="panel">
+          <h2>League table</h2>
+          <table class="ladder">
+            <thead>
+              <tr><th>#</th><th>Club</th><th>P</th><th>W</th><th>D</th><th>L</th><th>PD</th><th>BP</th><th>Pts</th></tr>
+            </thead>
+            <tbody id="tableBody"></tbody>
+          </table>
+        </section>
+        <section class="panel">
+          <h2 id="fixturesTitle">Fixtures</h2>
+          <ul id="fixturesList" class="fixtures"></ul>
+          <button id="playRound" class="primary">Play your match</button>
+        </section>
+      </div>
     </div>
 
     <div id="tacticsDrawer" class="drawer hidden">
