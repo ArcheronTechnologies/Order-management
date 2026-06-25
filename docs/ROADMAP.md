@@ -129,8 +129,15 @@ refactor everything else needs).
     1→5) from the Finances screen. Higher facilities raise the reputation ceiling
     the club is pulled toward each year (the money→facilities→prestige→squad loop)
     but also cost more in annual upkeep. Per-club facilities level persists for
-    all clubs (`facState`, `Season.facilities`). *Still to do:* committee
-    objectives/job security, sponsors/fundraising depth.
+    all clubs (`facState`, `Season.facilities`).
+  - *Done (sponsors):* **pitch-side sponsorship**. Each season a pool of local
+    sponsor offers appears, scaled by club standing & tier; sign up to four to
+    bank an up-front fee and put their **board on the sideline** (rendered in the
+    match). Every deal carries a **performance goal** (finish top N / win X
+    matches) and a **development goal** (grow reputation by N / upgrade facilities
+    / avoid the drop) that pay bonuses when met — settled against the final table
+    and the club's growth at season's end (`sponsors.ts`). *Still to do:*
+    committee objectives/job security, multi-year deals, fundraising.
 - **M12 — Youth & academy.** Annual intake (newgens), minis/juniors, schools links,
   U18/U20, development centres, feeder/affiliate clubs.
 - **M13 — Competitions & game world.** Full Swedish pyramid + promotion/relegation,

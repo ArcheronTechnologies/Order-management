@@ -11,6 +11,7 @@ import { UNION_POSITIONS, setRole, serializePlayer, deserializePlayer, buildSqua
 import { SevensCup, sevensLineup, cupEntrants, ROUND_NAMES, type SevensTie } from "./engine/sevens";
 import { computeFinances, committeeMood, formatKr, facilityUpgradeCost, type FinanceBreakdown } from "./engine/finances";
 import { pitchCondition, attendance as crowdAttendance, type MatchEnvironment, type SponsorBoard } from "./engine/matchday";
+import { generateOffers, settleSponsors, type SponsorOffer } from "./engine/sponsors";
 import { developSquad, type SeasonDevelopment } from "./engine/development";
 import {
   applyTraining,
@@ -54,7 +55,8 @@ const squadView = $("squadView");
 const selectView = $("selectView");
 const sevensView = $("sevensView");
 const financesView = $("financesView");
-type ViewName = "career" | "season" | "match" | "squad" | "select" | "sevens" | "finances";
+const sponsorsView = $("sponsorsView");
+type ViewName = "career" | "season" | "match" | "squad" | "select" | "sevens" | "finances" | "sponsors";
 function showView(v: ViewName) {
   appView.classList.toggle("hidden", v !== "match");
   careerView.classList.toggle("hidden", v !== "career");
@@ -63,6 +65,7 @@ function showView(v: ViewName) {
   selectView.classList.toggle("hidden", v !== "select");
   sevensView.classList.toggle("hidden", v !== "sevens");
   financesView.classList.toggle("hidden", v !== "finances");
+  sponsorsView.classList.toggle("hidden", v !== "sponsors");
 }
 
 // --- match view elements -------------------------------------------------
@@ -133,9 +136,26 @@ function buildEnvironment(home: Team, away: Team): MatchEnvironment {
     boards,
   };
 }
-/** Sponsor boards for the user's club (filled once the sponsorship system lands). */
+/** Sponsor boards for the user's club — the deals they've signed this season. */
 function userSponsorBoards(): SponsorBoard[] {
-  return [];
+  return signedSponsors.map((s) => ({ name: s.name, color: s.color }));
+}
+
+// ---- sponsorship ----
+const MAX_SPONSORS = 4;
+let sponsorOffers: SponsorOffer[] = []; // this season's available deals
+let signedSponsors: SponsorOffer[] = []; // deals signed this season
+let seasonStartRep = 0; // reputation snapshot at season start (for "grow rep" goals)
+let lastSponsorPayout: { total: number; met: number; of: number } | null = null;
+
+/** Generate a fresh pool of offers and clear last year's signings (new season). */
+function refreshSponsors() {
+  if (!season) return;
+  const user = season.userClub;
+  seasonStartRep = Math.round(season.repOf(user));
+  signedSponsors = [];
+  const rng = new Rng((seasonSeed * 7349 + season.year * 19) >>> 0);
+  sponsorOffers = generateOffers(rng, season.repOf(user), currentTier(user), currentFacilities(user), season.clubs.length);
 }
 // the living pyramid: current tier & reputation per club short, for ALL 24 clubs,
 // evolving year on year (promotion/relegation move clubs between tiers).
@@ -213,6 +233,48 @@ function renderFinances() {
 }
 $("financesBtn").addEventListener("click", renderFinances);
 $("financesBack").addEventListener("click", () => renderSeason());
+
+function sponsorCard(s: SponsorOffer, signed: boolean): string {
+  return `<div class="sponsor-card" style="border-left-color:${s.color}">
+    <div class="sp-head"><span class="sp-name">${s.name}</span><span class="sp-up">${formatKr(s.upfront)} up front</span></div>
+    <div class="sp-goals">
+      <div>🏆 ${s.perfGoal.desc} → <strong>${formatKr(s.perfBonus)}</strong></div>
+      <div>📈 ${s.devGoal.desc} → <strong>${formatKr(s.devBonus)}</strong></div>
+    </div>
+    ${signed ? `<div class="sp-signed">Signed</div>` : `<button class="primary-inline sp-sign" data-id="${s.id}">Sign deal</button>`}
+  </div>`;
+}
+function renderSponsors() {
+  if (!season) return;
+  $("sponsorsSlots").textContent = `${signedSponsors.length}/${MAX_SPONSORS} boards`;
+  const signedEl = $("sponsorsSigned");
+  signedEl.innerHTML = signedSponsors.length
+    ? signedSponsors.map((s) => sponsorCard(s, true)).join("")
+    : `<p class="muted">No sponsors signed yet — sign a deal to put a board pitch-side and bank the fee.</p>`;
+  const full = signedSponsors.length >= MAX_SPONSORS;
+  const offersEl = $("sponsorsOffers");
+  offersEl.innerHTML = full
+    ? `<p class="muted">All board space is taken for this season.</p>`
+    : sponsorOffers.length
+      ? sponsorOffers.map((s) => sponsorCard(s, false)).join("")
+      : `<p class="muted">No offers on the table right now.</p>`;
+  offersEl.querySelectorAll<HTMLButtonElement>(".sp-sign").forEach((btn) => {
+    btn.addEventListener("click", () => signSponsor(Number(btn.dataset.id)));
+  });
+  showView("sponsors");
+}
+function signSponsor(id: number) {
+  if (!season || signedSponsors.length >= MAX_SPONSORS) return;
+  const idx = sponsorOffers.findIndex((s) => s.id === id);
+  if (idx < 0) return;
+  const [offer] = sponsorOffers.splice(idx, 1);
+  signedSponsors.push(offer);
+  balance += offer.upfront;
+  save();
+  renderSponsors();
+}
+$("sponsorsBtn").addEventListener("click", renderSponsors);
+$("sponsorsBack").addEventListener("click", () => renderSeason());
 $("finUpgrade").addEventListener("click", () => {
   if (!season) return;
   const club = season.userClub;
@@ -470,6 +532,9 @@ function save() {
     gfResolved,
     nationalChamp: nationalChamp?.short,
     balance,
+    sponsorOffers,
+    signedSponsors,
+    seasonStartRep,
     tactics: userTactics,
     results: season.fixtures
       .filter((f) => f.played)
@@ -504,6 +569,13 @@ function load(): boolean {
     gfResolved = !!d.gfResolved;
     nationalChamp = d.nationalChamp ? CLUBS.find((c) => c.short === d.nationalChamp) ?? null : null;
     balance = d.balance ?? (currentTier(user) === "allsvenskan" ? 90000 : 45000);
+    if (Array.isArray(d.sponsorOffers) && Array.isArray(d.signedSponsors)) {
+      sponsorOffers = d.sponsorOffers;
+      signedSponsors = d.signedSponsors;
+      seasonStartRep = d.seasonStartRep ?? Math.round(season.repOf(user));
+    } else {
+      refreshSponsors();
+    }
     userTactics = d.tactics ?? { ...PRESETS[0].tactics };
     trainingPlan = d.training ?? { ...DEFAULT_TRAINING };
     for (const r of d.results ?? []) {
@@ -573,6 +645,7 @@ function startCareer(club: Team) {
   gfResolved = false;
   nationalChamp = null;
   gfTie = null;
+  refreshSponsors();
   save();
   renderSeason();
 }
@@ -590,6 +663,7 @@ function renderDressingRoom() {
   const parts: string[] = [];
   // promotion/relegation news from the rollover just gone
   if (lastRolloverSummary) parts.push(`🪜 ${lastRolloverSummary}`);
+  if (lastSponsorPayout) parts.push(`🤝 Sponsors paid ${formatKr(lastSponsorPayout.total)} (${lastSponsorPayout.met}/${lastSponsorPayout.of} goals met).`);
   // pre-season development summary (shown the first view of a new year)
   if (lastDev && (lastDev.retirements.length || lastDev.departures.length || lastDev.intake.length || lastDev.risers.length)) {
     const seg: string[] = [];
@@ -799,6 +873,24 @@ function startNextSeason() {
   balance += currentSeasonFinances()?.net ?? 0;
   season.endSeasonReputation();
   Object.assign(repState, season.reputationState());
+  // settle this season's sponsor goals against the final table & club growth
+  if (signedSponsors.length) {
+    const table = season.table();
+    const finishPos = table.findIndex((r) => r.team === season!.userClub) + 1;
+    const wins = table.find((r) => r.team === season!.userClub)?.won ?? 0;
+    const settled = settleSponsors(signedSponsors, {
+      finishPos,
+      wins,
+      repGrowth: Math.round(season.repOf(season.userClub)) - seasonStartRep,
+      facilities: currentFacilities(season.userClub),
+      divisionSize: season.clubs.length,
+    });
+    balance += settled.total;
+    const met = settled.outcomes.reduce((nn, o) => nn + (o.perfMet ? 1 : 0) + (o.devMet ? 1 : 0), 0);
+    lastSponsorPayout = { total: settled.total, met, of: signedSponsors.length * 2 };
+  } else {
+    lastSponsorPayout = null;
+  }
   pendingRolloverYear = season.year + 1;
   const rng = new Rng((seasonSeed * 2654435761 + pendingRolloverYear) >>> 0);
 
@@ -906,6 +998,7 @@ function finalizeRollover() {
   gfResolved = false;
   nationalChamp = null;
   gfTie = null;
+  refreshSponsors();
   save();
   renderSeason();
 }
@@ -1112,6 +1205,7 @@ function finishUserMatch() {
   lastSnubs = applySelectionMorale(season.rosterFor(season.userClub), won);
   lastDev = null; // pre-season summary clears once the season is under way
   lastRolloverSummary = null;
+  lastSponsorPayout = null;
   // your XV tire & risk knocks; then the whole league recovers a week
   applyPostMatch(season.rosterFor(season.userClub), (availSeed * 13 + 9) >>> 0);
   for (const c of season.clubs) applyWeeklyRecovery(season.rosterFor(c));
