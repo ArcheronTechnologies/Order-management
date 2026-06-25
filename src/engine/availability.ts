@@ -40,6 +40,52 @@ export function rollAvailability(squad: Player[], seed: number, reputation = 60)
   });
 }
 
+/** Personalities that chafe at being left out — they expect to be picked. */
+const GAME_TIME_HUNGRY = new Set([
+  "Ambitious", "Mercenary", "Volatile", "Temperamental", "Determined",
+  "Charismatic Leader", "Model Professional",
+]);
+
+export interface Snub {
+  player: Player;
+  severity: "annoyed" | "frustrated" | "furious";
+}
+
+/**
+ * Game-time morale after a match: starters lift (more in a win); fit players
+ * left out stew — the ambitious, big-ego and clearly-good-enough most of all.
+ * Returns the notable snubs so the manager hears about unhappy fringe players.
+ */
+export function applySelectionMorale(squad: Player[], won: boolean): Snub[] {
+  const fit = squad.filter((p) => p.condition.injuredWeeks === 0);
+  const cas = fit.map((p) => p.hidden.currentAbility).sort((a, b) => a - b);
+  const median = cas.length ? cas[Math.floor(cas.length / 2)] : 50;
+  const snubs: Snub[] = [];
+  for (const p of fit) {
+    if (p.onField) {
+      p.condition.morale = clamp(p.condition.morale + (won ? 4 : 1.5), 0, 100);
+      continue;
+    }
+    let hit = 1.2; // everyone would rather have played
+    if (GAME_TIME_HUNGRY.has(p.person.personality)) hit += 2;
+    hit += Math.max(0, p.person.ambition - 10) * 0.25;
+    if (p.hidden.currentAbility >= median) hit += 1.5; // "I'm good enough — why not me?"
+    p.condition.morale = clamp(p.condition.morale - hit, 0, 100);
+    if (hit >= 6) snubs.push({ player: p, severity: "furious" });
+    else if (hit >= 4.5) snubs.push({ player: p, severity: "frustrated" });
+    else if (hit >= 3) snubs.push({ player: p, severity: "annoyed" });
+  }
+  const rank = { furious: 0, frustrated: 1, annoyed: 2 };
+  return snubs.sort((a, b) => rank[a.severity] - rank[b.severity]);
+}
+
+/** Persistently unhappy players (low morale) — surfaced to the manager. */
+export function squadConcerns(squad: Player[]): Player[] {
+  return squad
+    .filter((p) => p.condition.morale < 38)
+    .sort((a, b) => a.condition.morale - b.condition.morale);
+}
+
 /** How well a player fits a position: exact > can-cover > emergency; CA breaks ties. */
 export function fitScore(p: Player, posShort: string): number {
   let base = 0;

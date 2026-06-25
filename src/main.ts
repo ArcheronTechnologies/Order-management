@@ -13,10 +13,15 @@ import {
   applyLineup,
   applyPostMatch,
   applyWeeklyRecovery,
+  applySelectionMorale,
+  squadConcerns,
   fitScore,
   type Availability,
+  type Snub,
 } from "./engine/availability";
+import { deliverTalk, TONES, type TalkPhase, type TalkTone } from "./engine/teamtalk";
 import { createTacticsPanel } from "./ui/tactics-panel";
+import type { Side } from "./engine/types";
 
 const $ = <T extends HTMLElement>(id: string): T => {
   const el = document.getElementById(id);
@@ -66,6 +71,9 @@ const fixturesList = $("fixturesList");
 const fixturesTitle = $("fixturesTitle");
 const playRoundBtn = $("playRound") as HTMLButtonElement;
 const championBanner = $("championBanner");
+const dressingRoomNote = document.createElement("p");
+dressingRoomNote.className = "snub-note hidden";
+championBanner.insertAdjacentElement("afterend", dressingRoomNote);
 
 // --- state ---------------------------------------------------------------
 let match: Match | null = null;
@@ -74,6 +82,9 @@ let renderedCommentary = 0;
 let season: Season | null = null;
 let userTactics: TeamTactics = { ...PRESETS[0].tactics };
 let currentFixture: Fixture | null = null; // the user's fixture being played
+let userSide: Side = "home"; // which side of the current match the user manages
+let lastHalf = 1; // to detect the half-time break for a talk
+let lastSnubs: Snub[] = []; // fringe players unhappy at being left out last match
 
 const tacticsPanel = createTacticsPanel((t) => {
   userTactics = t;
@@ -81,6 +92,80 @@ const tacticsPanel = createTacticsPanel((t) => {
 });
 tacticsBtn.addEventListener("click", tacticsPanel.open);
 $("openTacticsFromSeason").addEventListener("click", tacticsPanel.open);
+
+// ====================== team talks =======================================
+const talkOverlay = $("talkOverlay");
+const talkTitle = $("talkTitle");
+const talkContext = $("talkContext");
+const talkHint = $("talkHint");
+const talkTones = $("talkTones");
+const talkReactions = $("talkReactions");
+const talkSummary = $("talkSummary");
+const talkReactionList = $("talkReactionList") as HTMLUListElement;
+const talkContinue = $("talkContinue") as HTMLButtonElement;
+
+const PHASE_TITLE: Record<TalkPhase, string> = {
+  pre: "Pre-match team talk",
+  half: "Half-time team talk",
+  full: "Full-time team talk",
+};
+
+/** Show the talk overlay; resolves once the manager has spoken and read the room. */
+function showTeamTalk(phase: TalkPhase): Promise<void> {
+  return new Promise((resolve) => {
+    if (!season || !match) return resolve();
+    const roster = season.rosterFor(season.userClub);
+    const myScore = match.score[userSide];
+    const oppScore = match.score[userSide === "home" ? "away" : "home"];
+    const margin = myScore - oppScore;
+    const opp = currentFixture
+      ? currentFixture.home === season.userClub
+        ? currentFixture.away
+        : currentFixture.home
+      : null;
+    const favourite = opp ? season.repOf(season.userClub) >= season.repOf(opp) : true;
+
+    talkTitle.textContent = PHASE_TITLE[phase];
+    talkContext.textContent =
+      phase === "pre"
+        ? favourite ? "You're the favourites" : "Underdogs today"
+        : `${myScore}–${oppScore} · ${margin > 0 ? "ahead" : margin < 0 ? "behind" : "level"}`;
+    talkHint.textContent =
+      phase === "full" ? "A word before they head off." : "How do you send them out?";
+    talkReactions.classList.add("hidden");
+    talkTones.classList.remove("hidden");
+    talkTones.innerHTML = "";
+    for (const t of TONES) {
+      const btn = document.createElement("button");
+      btn.className = "talk-tone";
+      btn.innerHTML = `<span class="tone-label">${t.label}</span><span class="tone-blurb">${t.blurb}</span>`;
+      btn.addEventListener("click", () => speak(t.tone));
+      talkTones.appendChild(btn);
+    }
+    talkOverlay.classList.remove("hidden");
+
+    function speak(tone: TalkTone) {
+      const res = deliverTalk(roster, tone, { phase, margin, favourite });
+      if (phase !== "full" && match) match.talkBoost[userSide] = res.boost;
+      talkTones.classList.add("hidden");
+      talkSummary.textContent = res.summary;
+      talkReactionList.innerHTML = res.reactions
+        .slice()
+        .sort((a, b) => b.delta - a.delta)
+        .map(
+          (r) =>
+            `<li><span class="who"><span class="pos">${r.player.position.short}</span>${r.player.name}</span><span class="mood ${r.mood}">${r.mood.replace("-", " ")}</span></li>`
+        )
+        .join("");
+      talkReactions.classList.remove("hidden");
+    }
+
+    talkContinue.onclick = () => {
+      talkOverlay.classList.add("hidden");
+      resolve();
+    };
+  });
+}
 
 const squadBody = $("squadBody");
 const squadClub = $("squadClub");
@@ -195,11 +280,41 @@ function startCareer(club: Team) {
 }
 
 // ====================== season hub =======================================
+function renderDressingRoom() {
+  if (!season) {
+    dressingRoomNote.classList.add("hidden");
+    return;
+  }
+  const parts: string[] = [];
+  // only surface players who genuinely mind being left out (not the mildly annoyed)
+  const serious = lastSnubs.filter((s) => s.severity !== "annoyed");
+  if (serious.length) {
+    const names = serious
+      .slice(0, 4)
+      .map((s) => `${s.player.name}${s.severity === "furious" ? " (furious)" : ""}`)
+      .join(", ");
+    parts.push(`🗣️ Unhappy at being left out: ${names}.`);
+  }
+  const concerns = squadConcerns(season.rosterFor(season.userClub)).filter(
+    (p) => !lastSnubs.some((s) => s.player.id === p.id)
+  );
+  if (concerns.length) {
+    parts.push(`Low morale: ${concerns.slice(0, 4).map((p) => p.name).join(", ")}.`);
+  }
+  if (parts.length) {
+    dressingRoomNote.innerHTML = parts.join(" ");
+    dressingRoomNote.classList.remove("hidden");
+  } else {
+    dressingRoomNote.classList.add("hidden");
+  }
+}
+
 function renderSeason() {
   if (!season) return;
   showView("season");
   seasonClub.textContent = `${season.userClub.name} · rep ${Math.round(season.repOf(season.userClub))}`;
   championBanner.classList.add("hidden");
+  renderDressingRoom();
 
   // table
   const rows = season.table();
@@ -384,6 +499,8 @@ function startUserMatch(fixture: Fixture) {
   const home = fixture.home;
   const away = fixture.away;
   const userIsHome = home === season!.userClub;
+  userSide = userIsHome ? "home" : "away";
+  lastHalf = 1;
   // the AI opponent also has availability and fields its best available XV
   const aiClub = userIsHome ? away : home;
   const aiRoster = season!.rosterFor(aiClub);
@@ -412,7 +529,8 @@ function startUserMatch(fixture: Fixture) {
   syncScoreboard();
   renderer.resize();
   renderer.draw(match);
-  setPlaying(true);
+  // a pre-match team talk sets the tone before kickoff
+  showTeamTalk("pre").then(() => setPlaying(true));
 }
 
 function finishUserMatch() {
@@ -420,6 +538,9 @@ function finishUserMatch() {
   const ht = match.events.filter((e) => e.kind === "try" && e.side === "home").length;
   const at = match.events.filter((e) => e.kind === "try" && e.side === "away").length;
   season.record(currentFixture, match.score.home, match.score.away, ht, at);
+  // game-time morale: starters lift, snubbed fringe players stew
+  const won = match.score[userSide] > match.score[userSide === "home" ? "away" : "home"];
+  lastSnubs = applySelectionMorale(season.rosterFor(season.userClub), won);
   // your XV tire & risk knocks; then the whole league recovers a week
   applyPostMatch(season.rosterFor(season.userClub), (availSeed * 13 + 9) >>> 0);
   for (const c of season.clubs) applyWeeklyRecovery(season.rosterFor(c));
@@ -444,8 +565,9 @@ function simRestOfRound(skip: Fixture | null) {
 
 backToSeasonBtn.addEventListener("click", () => {
   setPlaying(false);
-  if (match && match.finished) finishUserMatch();
-  else if (confirm("Leave this match? It will be quick-simmed instead.")) {
+  if (match && match.finished) {
+    showTeamTalk("full").then(() => finishUserMatch());
+  } else if (confirm("Leave this match? It will be quick-simmed instead.")) {
     // abandon → quick-sim the user's match too
     if (season && currentFixture) {
       const rng = new Rng((seasonSeed * 53 + season.round) >>> 0);
@@ -511,10 +633,18 @@ function loop(now: number) {
       acc -= SIM_DT;
       guard++;
       if (match.finished) break;
+      // stop the clock at the interval for a half-time team talk (career only)
+      if (currentFixture && match.half === 2 && lastHalf === 1) break;
     }
     syncScoreboard();
     flushCommentary();
     if (match.finished) setPlaying(false);
+    else if (currentFixture && match.half === 2 && lastHalf === 1) {
+      lastHalf = 2;
+      acc = 0;
+      setPlaying(false);
+      showTeamTalk("half").then(() => setPlaying(true));
+    }
   }
   if (match) renderer.draw(match);
 }

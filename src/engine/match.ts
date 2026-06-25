@@ -68,6 +68,8 @@ export class Match {
   events: ScoreEvent[] = [];
   commentary: CommentaryLine[] = [];
   finished = false;
+  /** transient team-talk lift/slump per side (-0.06..+0.06), set by deliverTalk. */
+  talkBoost: Record<Side, number> = { home: 0, away: 0 };
   /** counters for tuning/debug (not shown in the UI). */
   debug = { rucks: 0, breaks: 0, gateContacts: 0, cleanBreaks: 0, endpoint: 0, kicks: 0, turnovers: 0, phases: 0, tryRun: 0, tryDive: 0, tryPush: 0, tryMaul: 0 };
 
@@ -214,7 +216,9 @@ export class Match {
     }
     // unfit players carry less around the park
     const fit = 0.82 + 0.18 * (p.condition.fitness / 100);
-    return base * (1 - 0.4 * p.fatigue) * burst * fit;
+    // a team talk that landed gives a small, side-wide lift (or slump)
+    const talk = 1 + this.talkBoost[p.side];
+    return base * (1 - 0.4 * p.fatigue) * burst * fit * talk;
   }
   private moveToward(p: Player, tx: number, ty: number, spd: number, dt: number) {
     const d = dist(p.x, p.y, tx, ty);
@@ -310,6 +314,10 @@ export class Match {
     // ~35 of 80 minutes is ball-in-play, which keeps the number of phases (and
     // so the scoring) realistic.
     this.clock += dt;
+
+    // the lift from a team talk fades as the half wears on (roughly halves)
+    this.talkBoost.home *= 1 - dt * 0.0003;
+    this.talkBoost.away *= 1 - dt * 0.0003;
 
     switch (this.phase) {
       case "flight":

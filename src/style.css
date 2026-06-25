@@ -397,3 +397,28 @@ button.primary:hover { filter: brightness(1.08); }
 .avail-list .none { color: var(--muted); justify-content: center; }
 .unavail-h { margin-top: 14px !important; }
 @media (max-width: 820px) { .select-grid, .xv-slots { grid-template-columns: 1fr; } }
+
+/* team talk overlay */
+.overlay { position: fixed; inset: 0; background: rgba(4,10,7,0.78); display: flex; align-items: center; justify-content: center; z-index: 50; backdrop-filter: blur(3px); }
+.talk-card { background: var(--panel, #11201a); border: 1px solid var(--line); border-radius: 12px; width: min(560px, 92vw); max-height: 88vh; overflow: auto; padding: 20px 22px; box-shadow: 0 16px 48px rgba(0,0,0,0.5); }
+.talk-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.talk-head h2 { margin: 0; font-size: 19px; }
+.talk-context { color: var(--muted); font-size: 13px; font-weight: 700; }
+.talk-hint { color: var(--muted); font-size: 13px; margin: 6px 0 14px; }
+.talk-tones { display: grid; gap: 8px; }
+.talk-tone { display: flex; flex-direction: column; gap: 2px; text-align: left; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; cursor: pointer; transition: border-color .1s, transform .05s; }
+.talk-tone:hover { border-color: var(--accent); transform: translateY(-1px); }
+.talk-tone .tone-label { font-weight: 700; font-size: 14px; }
+.talk-tone .tone-blurb { color: var(--muted); font-size: 12px; }
+.talk-summary { font-weight: 700; margin: 0 0 10px; }
+.talk-reactions ul { list-style: none; margin: 0 0 14px; padding: 0; max-height: 46vh; overflow: auto; }
+.talk-reactions li { display: flex; justify-content: space-between; gap: 8px; padding: 4px 2px; font-size: 13px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+.talk-reactions .who { color: var(--text); }
+.talk-reactions .who .pos { color: var(--muted); font-size: 11px; margin-right: 6px; }
+.mood { font-size: 12px; font-weight: 700; }
+.mood.lifted, .mood.fired-up { color: #4ad07a; }
+.mood.settled { color: #9fc6b2; }
+.mood.unmoved { color: var(--muted); }
+.mood.rattled, .mood.stung { color: #ff6b6b; }
+.snub-note { max-width: 1100px; margin: 8px auto 0; padding: 8px 12px; border-radius: 8px; background: rgba(255,107,107,0.1); border: 1px solid rgba(255,107,107,0.3); color: #ffb3b3; font-size: 13px; }
+.concern-tag { color: #ff6b6b; font-size: 11px; font-weight: 700; margin-left: 6px; }

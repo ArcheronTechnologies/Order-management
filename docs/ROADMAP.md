@@ -57,6 +57,12 @@ refactor everything else needs).
 - **M7 — Morale, squad dynamics & player interaction.** Morale/concerns/promises;
   hierarchy/social groups/leaders/dressing room; 1‑on‑1s & praise/criticism;
   captain / goal-kicker / set-piece taker; team talks.
+  - *Started:* **team talks** (pre/half/full-time) with five tones whose
+    reception depends on tone × scoreline × personality/temperament, giving a
+    transient in-match lift/slump that fades through the half (`teamtalk.ts`,
+    `Match.talkBoost`). **Game-time unhappiness**: starters lift, fit players
+    left out stew — the ambitious & big-ego most of all — surfaced as
+    dressing-room concerns (`applySelectionMorale`/`squadConcerns`).
 - **M8 — Deeper tactics & set-piece creator.** Roles & duties per position;
   in-possession / transition / out-of-possession instructions; opposition
   instructions; familiarity; a set-piece creator; shouts & mentality.
