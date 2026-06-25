@@ -1,11 +1,18 @@
 import { Rng } from "./rng";
 
+/**
+ * There's no press corps at this level — it all plays out on social media. Your
+ * matchday statements go out on the club page (the tone is how you word the
+ * post), and "rumours" are players themselves — the one linked away, their
+ * team-mates, and rivals — sounding off online.
+ */
 export type PressTone = "confident" | "measured" | "defiant" | "humble";
 
 export interface ToneOption {
   tone: PressTone;
   label: string;
 }
+/** how to word the club-page post. */
 export const PRESS_TONES: ToneOption[] = [
   { tone: "confident", label: "Confident" },
   { tone: "measured", label: "Measured" },
@@ -13,15 +20,16 @@ export const PRESS_TONES: ToneOption[] = [
   { tone: "humble", label: "Humble" },
 ];
 
+// ===================== pre-match club-page post =========================
 const FAV_QS = [
-  "You're favourites today — is the pressure all on you?",
-  "Everyone expects a win here. Comfortable with that?",
-  "Anything less than a win would be a disappointment, wouldn't it?",
+  "Matchday. You're fancied for this one — what goes out on the club page?",
+  "Home or away, you're favourites today. What's the matchday post?",
+  "The lads are buzzing in the group chat. What do you put out?",
 ];
 const DOG_QS = [
-  "Few give you a chance today. Your thoughts?",
-  "You're the underdogs — is this damage limitation?",
-  "On paper they're the stronger side. How do you approach it?",
+  "Matchday, and few fancy you here. What goes out on the club page?",
+  "Tough one on paper. What's the matchday post?",
+  "Underdogs again this week. How do you word the club post?",
 ];
 
 export function pressQuestion(favourite: boolean, rng: Rng): string {
@@ -33,44 +41,44 @@ export interface PressOutcome {
   morale: number; // squad-wide morale nudge
   board: number; // board approval nudge (all members)
   rep: number; // reputation nudge
-  line: string; // how it went down
+  line: string; // how the post landed
 }
 
-/** How a press answer lands depends on whether you're favourite or underdog. */
+/** How a club-page post lands depends on whether you're favourite or underdog. */
 export function pressOutcome(tone: PressTone, favourite: boolean): PressOutcome {
   switch (tone) {
     case "confident":
       return favourite
-        ? { morale: 3, board: 2, rep: 1, line: "Assured words — the room nods along." }
-        : { morale: 2, board: -2, rep: 1, line: "Bullish for an underdog — bold, and it'll be remembered." };
+        ? { morale: 3, board: 2, rep: 1, line: "Assured matchday post — the lads share it round." }
+        : { morale: 2, board: -2, rep: 1, line: "Bullish post for an underdog — bold, and screenshotted." };
     case "measured":
-      return { morale: 1, board: 1, rep: 0, line: "A calm, professional answer. No headlines." };
+      return { morale: 1, board: 1, rep: 0, line: "A calm, professional post. Steady likes." };
     case "defiant":
       return favourite
-        ? { morale: 1, board: -3, rep: 0, line: "Comes across as arrogant given the billing." }
-        : { morale: 4, board: 1, rep: 1, line: "Fighting talk — the dressing room loves it." };
+        ? { morale: 1, board: -3, rep: 0, line: "Comes across cocky online given the billing." }
+        : { morale: 4, board: 1, rep: 1, line: "Fighting-talk post — the dressing room loves it." };
     case "humble":
-      return { morale: 0, board: 2, rep: 0, line: "Humble and respectful — the board approve." };
+      return { morale: 0, board: 2, rep: 0, line: "Humble, respectful post — the committee approve." };
   }
 }
 
-// ======================= post-match interview ===========================
+// ===================== full-time club-page post =========================
 export type MatchResult = "won" | "lost" | "drew";
 
 const WON_QS = [
-  "A good win — what pleased you most out there?",
-  "Three points in the bag. How big was that?",
-  "The fans are buzzing. Talk us through it.",
+  "Full time, a win. What does the club post?",
+  "Three points. What goes up on the club page?",
+  "Job done. What's the full-time post?",
 ];
 const LOST_QS = [
-  "A tough afternoon. Where did it go wrong?",
-  "That's a loss to swallow. Your reaction?",
-  "The result didn't go your way — what now?",
+  "Full time, a loss. What goes out on the club page?",
+  "Beaten today. What's the full-time post?",
+  "Not your day. How do you word the club post?",
 ];
 const DREW_QS = [
-  "A share of the spoils — a point gained or two dropped?",
-  "Honours even. Happy with that?",
-  "A draw at the death. How do you feel?",
+  "Honours even. What does the club post?",
+  "A share of the spoils. What goes on the club page?",
+  "A draw at the death. What's the full-time post?",
 ];
 
 export function postMatchQuestion(result: MatchResult, rng: Rng): string {
@@ -78,46 +86,72 @@ export function postMatchQuestion(result: MatchResult, rng: Rng): string {
   return pool[Math.floor(rng.next() * pool.length)];
 }
 
-/** How a post-match answer lands depends on the result. */
+/** How a full-time club-page post lands depends on the result. */
 export function postMatchOutcome(tone: PressTone, result: MatchResult): PressOutcome {
   switch (tone) {
     case "confident":
       return result === "won"
-        ? { morale: 4, board: 3, rep: 2, line: "Beaming and assured — the room laps it up." }
+        ? { morale: 4, board: 3, rep: 2, line: "Beaming full-time post — likes pouring in." }
         : result === "drew"
           ? { morale: 1, board: 0, rep: 1, line: "Spins the draw as a platform — fair enough." }
-          : { morale: -1, board: -2, rep: 0, line: "Upbeat after a loss — reads as out of touch." };
+          : { morale: -1, board: -2, rep: 0, line: "Upbeat after a loss — the replies aren't kind." };
     case "measured":
       return result === "won"
-        ? { morale: 2, board: 2, rep: 1, line: "Credit shared, feet on the ground. Professional." }
-        : { morale: 1, board: 1, rep: 0, line: "Level-headed — no drama, no headlines." };
+        ? { morale: 2, board: 2, rep: 1, line: "Credit shared, feet on the ground. Classy post." }
+        : { morale: 1, board: 1, rep: 0, line: "Level-headed post — no drama in the replies." };
     case "defiant":
       return result === "lost"
-        ? { morale: 3, board: -1, rep: 1, line: "Refuses to panic — the dressing room responds." }
-        : { morale: 1, board: -1, rep: 1, line: "Combative even in victory — a touch much." };
+        ? { morale: 3, board: -1, rep: 1, line: "Refuses to panic — the lads rally behind the post." }
+        : { morale: 1, board: -1, rep: 1, line: "Combative even in victory — a touch much online." };
     case "humble":
       return result === "won"
-        ? { morale: 1, board: 3, rep: 1, line: "Gracious in victory — the board nod along." }
-        : { morale: 2, board: 2, rep: 0, line: "Takes it on the chin — earns some respect." };
+        ? { morale: 1, board: 3, rep: 1, line: "Gracious in victory — the committee nod along." }
+        : { morale: 2, board: 2, rep: 0, line: "Takes it on the chin online — earns some respect." };
   }
 }
 
-// ============================ rumours / social ==========================
-const RUMOUR_TEMPLATES: ((club: string, rng: Rng) => string)[] = [
-  (c) => `Talk in the clubhouse links a ${c} forward with a move to a rival — nothing in it, says the committee.`,
-  (c) => `A local pundit tips ${c} for a mid-table finish: "honest, hard-working, but short of a cutting edge."`,
-  (c) => `Social feed buzz: a ${c} youngster turned heads at training this week.`,
-  (c) => `Word is a rival coach has been spotted at ${c} fixtures — scouting, or just a fan?`,
-  (c) => `${c} supporters' group calls for more investment in the clubhouse bar. The board has "noted it."`,
-  (c) => `Rumour on the grapevine: a former ${c} player may be tempted out of retirement for one last season.`,
-  (c) => `A pundit predicts a tough run-in for ${c}: "their fixture list is unforgiving from here."`,
-];
+// ===================== players sounding off (social) ====================
+export interface SocialPost {
+  text: string;
+  morale: number; // small ripple, only applied when it's your own player
+}
 
-/** A flavour item for the inbox. Mostly cosmetic; the occasional small morale ripple. */
-export function rumour(clubName: string, rng: Rng): { text: string; morale: number } {
-  const tmpl = RUMOUR_TEMPLATES[Math.floor(rng.next() * RUMOUR_TEMPLATES.length)];
-  // most rumours are pure flavour; a minority nudge morale a touch either way
-  const roll = rng.next();
-  const morale = roll < 0.15 ? -1 : roll > 0.85 ? 1 : 0;
-  return { text: tmpl(clubName, rng), morale };
+export interface SocialInput {
+  /** the player at the centre of the post. */
+  player: string;
+  /** that player's club name. */
+  club: string;
+  /** a team-mate who might react. */
+  teammate?: string;
+  /** true if the player is in the user's squad (so the ripple lands at home). */
+  ownClub: boolean;
+  rng: Rng;
+}
+
+/**
+ * A social-media post voiced by players themselves — the one linked with a move,
+ * their team-mates backing (or needling) them, or a rival having their say.
+ * No pundits, no rumour-mill: just the players online.
+ */
+export function playerSocial(inp: SocialInput): SocialPost {
+  const { player, club, teammate, ownClub, rng } = inp;
+  const mate = teammate ?? "A team-mate";
+  const own: { text: string; morale: number }[] = [
+    { text: `🗨️ ${player}: "Seen the chat about me leaving ${club} — not happening. Love this place. 🔴⚫"`, morale: 1 },
+    { text: `🗨️ ${player}: "Flattered by the interest, but my head's fully at ${club} right now."`, morale: -1 },
+    { text: `🗨️ ${mate}: "${player} is going NOWHERE 💪 best in the league and he knows it"`, morale: 1 },
+    { text: `🗨️ ${player}: "Hard watching from the bench lately, but I'll keep grafting and earn my shirt back."`, morale: -1 },
+    { text: `🗨️ ${mate}: "Buzzing for young ${player} — trained the house down this week, the real deal 👀"`, morale: 1 },
+    { text: `🗨️ ${player}: "Massive few weeks coming up for ${club}. We're ready. Get down and back the lads."`, morale: 1 },
+    { text: `🗨️ ${mate}: "Few of us out for a couple of quiet ones 🍺 then heads down — big game next week."`, morale: 0 },
+  ];
+  const rival: { text: string; morale: number }[] = [
+    { text: `🗨️ ${player} (${club}): "Bring on the weekend. We owe a few people. 😤"`, morale: 0 },
+    { text: `🗨️ ${player} (${club}): "Some of these pitches are a disgrace. Sort it out. 🙄"`, morale: 0 },
+    { text: `🗨️ ${player} (${club}): "Confident going into this run of games. ${club} on the up. 📈"`, morale: 0 },
+    { text: `🗨️ ${player} (${club}): "Respect to everyone who travels for these away days. Proper rugby folk."`, morale: 0 },
+  ];
+  const pool = ownClub ? own : rival;
+  const pick = pool[Math.floor(rng.next() * pool.length)];
+  return { text: pick.text, morale: ownClub ? pick.morale : 0 };
 }

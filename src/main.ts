@@ -14,7 +14,7 @@ import { pitchCondition, attendance as crowdAttendance, type MatchEnvironment, t
 import { generateOffers, settleSponsors, type SponsorOffer } from "./engine/sponsors";
 import { generateRecruitPool, signingFee, type Recruit } from "./engine/recruitment";
 import { generateYouthIntake, type Prospect } from "./engine/youth";
-import { pressQuestion, pressOutcome, postMatchQuestion, postMatchOutcome, rumour, PRESS_TONES, type PressTone, type MatchResult } from "./engine/media";
+import { pressQuestion, pressOutcome, postMatchQuestion, postMatchOutcome, playerSocial, PRESS_TONES, type PressTone, type MatchResult } from "./engine/media";
 import {
   generateBoard, boardConfidence, moodLabel, holdVote, lobby, moveAgainst, updateBoard,
   type BoardMember, type CapitalProposal,
@@ -800,6 +800,7 @@ function showPressConference(opp: Team): Promise<void> {
   return new Promise((resolve) => {
     if (!season) return resolve();
     const favourite = season.repOf(season.userClub) >= season.repOf(opp);
+    $("pressTitle").textContent = "Club page — matchday post";
     $("pressContext").textContent = favourite ? "You're the favourites" : "Underdogs";
     $("pressQuestion").textContent = pressQuestion(favourite, new Rng((seasonSeed * 51 + season.round * 7) >>> 0));
     pressTonesEl.innerHTML = "";
@@ -810,7 +811,7 @@ function showPressConference(opp: Team): Promise<void> {
         for (const m of board) m.approval = Math.max(0, Math.min(100, m.approval + o.board));
         repState[season!.userClub.short] = Math.max(15, Math.min(100, (repState[season!.userClub.short] ?? season!.userClub.reputation) + o.rep));
         season!.reputation.set(season!.userClub, repState[season!.userClub.short]);
-        logNews(`🎤 Presser: ${o.line}`);
+        logNews(`📱 Club page: ${o.line}`);
       }
       pressOverlay.classList.add("hidden");
       resolve();
@@ -824,7 +825,7 @@ function showPressConference(opp: Team): Promise<void> {
     }
     const skip = document.createElement("button");
     skip.className = "talk-tone";
-    skip.innerHTML = `<span class="tone-label">No comment</span><span class="tone-blurb">Say nothing of note.</span>`;
+    skip.innerHTML = `<span class="tone-label">Don't post</span><span class="tone-blurb">Keep the page quiet today.</span>`;
     skip.addEventListener("click", () => finish(null));
     pressTonesEl.appendChild(skip);
     pressOverlay.classList.remove("hidden");
@@ -838,6 +839,7 @@ function showPostMatchInterview(): Promise<void> {
     const myScore = match.score[userSide];
     const oppScore = match.score[userSide === "home" ? "away" : "home"];
     const result: MatchResult = myScore > oppScore ? "won" : myScore < oppScore ? "lost" : "drew";
+    $("pressTitle").textContent = "Club page — full-time post";
     $("pressContext").textContent =
       result === "won" ? `Full time · won ${myScore}–${oppScore}`
         : result === "lost" ? `Full time · lost ${myScore}–${oppScore}`
@@ -851,7 +853,7 @@ function showPostMatchInterview(): Promise<void> {
         for (const m of board) m.approval = Math.max(0, Math.min(100, m.approval + o.board));
         repState[season!.userClub.short] = Math.max(15, Math.min(100, (repState[season!.userClub.short] ?? season!.userClub.reputation) + o.rep));
         season!.reputation.set(season!.userClub, repState[season!.userClub.short]);
-        logNews(`🎙️ Post-match: ${o.line}`);
+        logNews(`📱 Club page: ${o.line}`);
       }
       pressOverlay.classList.add("hidden");
       resolve();
@@ -865,7 +867,7 @@ function showPostMatchInterview(): Promise<void> {
     }
     const skip = document.createElement("button");
     skip.className = "talk-tone";
-    skip.innerHTML = `<span class="tone-label">No comment</span><span class="tone-blurb">Keep it brief.</span>`;
+    skip.innerHTML = `<span class="tone-label">Don't post</span><span class="tone-blurb">Keep the page quiet.</span>`;
     skip.addEventListener("click", () => finish(null));
     pressTonesEl.appendChild(skip);
     pressOverlay.classList.remove("hidden");
@@ -1615,10 +1617,8 @@ function finalizeRollover() {
   refreshRecruits();
   refreshYouth();
   logNews(`📅 Year ${season.year}: ${divisionLabel(season.userClub)} season begins. Board confidence ${boardConfidence(board)}/100.`);
-  // a bit of pre-season grapevine chatter
-  const rumRng = new Rng((seasonSeed * 149 + year * 23) >>> 0);
-  const rr = rumour(season.userClub.name, rumRng);
-  logNews(`📰 ${rr.text}`);
+  // pre-season chatter from your own players, online
+  postSocial(season.userClub, true, new Rng((seasonSeed * 149 + year * 23) >>> 0));
   save();
   renderSeason();
 }
@@ -1856,18 +1856,36 @@ function finishUserMatch() {
   renderSeason();
 }
 
-/** Drop the occasional 📰 flavour item into the inbox (about every other round). */
+/** Drop the occasional 🗨️ player social-media post into the inbox (about every other round). */
 function maybeRumour() {
   if (!season) return;
   const rng = new Rng((seasonSeed * 131 + season.round * 17 + 5) >>> 0);
   if (rng.next() > 0.5) return; // not every round
-  // mostly about a rival; sometimes about your own club
-  const pool = season.clubs.filter((c) => c !== season!.userClub);
-  const club = rng.next() < 0.4 || pool.length === 0 ? season.userClub : pool[Math.floor(rng.next() * pool.length)];
-  const r = rumour(club.name, rng);
-  logNews(`📰 ${r.text}`);
-  if (r.morale !== 0 && club === season.userClub) {
-    for (const p of season.rosterFor(season.userClub)) p.condition.morale = Math.max(0, Math.min(100, p.condition.morale + r.morale));
+  // mostly about a rival; sometimes your own players sound off
+  const rivals = season.clubs.filter((c) => c !== season!.userClub);
+  const ownClub = rng.next() < 0.45 || rivals.length === 0;
+  const club = ownClub ? season.userClub : rivals[Math.floor(rng.next() * rivals.length)];
+  postSocial(club, ownClub, rng);
+}
+
+/** Build & log a player-voiced social post for a club's roster. */
+function postSocial(club: Team, ownClub: boolean, rng: Rng) {
+  if (!season) return;
+  const roster = season.rosterFor(club);
+  if (roster.length === 0) return;
+  const player = roster[Math.floor(rng.next() * roster.length)];
+  const mates = roster.filter((p) => p !== player);
+  const teammate = mates.length ? mates[Math.floor(rng.next() * mates.length)] : undefined;
+  const post = playerSocial({
+    player: player.name,
+    club: club.name,
+    teammate: teammate?.name,
+    ownClub,
+    rng,
+  });
+  logNews(post.text);
+  if (post.morale !== 0 && ownClub) {
+    for (const p of season.rosterFor(season.userClub)) p.condition.morale = Math.max(0, Math.min(100, p.condition.morale + post.morale));
   }
 }
 
