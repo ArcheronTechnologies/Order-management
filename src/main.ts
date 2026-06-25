@@ -204,6 +204,11 @@ function renderClub() {
     accBtns.querySelectorAll<HTMLButtonElement>(".access").forEach((b) =>
       b.addEventListener("click", () => { clubAccess = b.dataset.v as Access; save(); renderClub(); }));
   }
+  $("oldBoysList").innerHTML = oldBoys.length
+    ? oldBoys
+        .map((o) => `<li><span class="ob-name">${o.name} <span class="ob-role">${o.role}</span></span><span class="ob-give">${formatKr(o.donation)}/yr · ${o.years} yrs</span></li>`)
+        .join("") + `<li class="ob-tot"><span>Total donations</span><span>${formatKr(oldBoyDonations())}/yr</span></li>`
+    : `<li class="muted">No old boys yet — long-serving players who retire from your club will give back here.</li>`;
   showView("club");
 }
 function proposeProject(kind: CapitalProposal["kind"]) {
@@ -505,6 +510,22 @@ let pendingBoardOutcome: {
   balance: number; invested: boolean; youthPlayed: boolean; attendanceGood: boolean;
   tierBefore: "allsvenskan" | "div1";
 } | null = null;
+
+// ---- old boys: former players who give back as donors/supporters ----
+interface OldBoy { name: string; years: number; peak: number; donation: number; role: string; }
+let oldBoys: OldBoy[] = [];
+function oldBoyDonations(): number {
+  return oldBoys.reduce((s, o) => s + o.donation, 0);
+}
+/** A notable retiree (long-serving and/or quality) becomes an old boy who donates. */
+function makeOldBoy(p: Player): OldBoy | null {
+  const years = p.seasonsAtClub ?? 0;
+  const peak = p.hidden.potentialAbility;
+  if (years < 3 && peak < 64) return null; // real servants (3+ yrs) or notable talents give back
+  const donation = Math.round(years * 2400 + Math.max(0, peak - 52) * 480);
+  const role = peak >= 82 ? "Club legend" : peak >= 70 ? "Old boy" : "Loyal servant";
+  return { name: p.name, years, peak, donation, role };
+}
 function divisionLabel(club: Team): string {
   const t = currentTier(club) === "allsvenskan" ? "Allsvenskan" : "Division 1";
   return `${t} ${club.region === "north" ? "North" : "South"}`;
@@ -520,7 +541,7 @@ function currentSeasonFinances(): FinanceBreakdown | null {
   const awayOpponents = userFixtures.filter((f) => f.away === user).map((f) => f.home);
   return computeFinances(user, season.repOf(user), currentTier(user), homeMatches, awayOpponents, currentFacilities(user), {
     clubhouse, access: clubAccess, fieldRented: matchField === "rented", trainingRented: trainingGround === "rented",
-  });
+  }, oldBoyDonations());
 }
 
 function renderFinances() {
@@ -540,6 +561,7 @@ function renderFinances() {
     row("Sponsorship", fin.income.sponsorship) +
     row("Matchday (gate)", fin.income.matchday) +
     (fin.income.bar ? row("Clubhouse bar", fin.income.bar) : "") +
+    (fin.income.donations ? row("Old boys' donations", fin.income.donations) : "") +
     `<li class="fin-tot"><span>Total income</span><span>${formatKr(fin.incomeTotal)}</span></li>`;
   $("finCosts").innerHTML =
     row("Facilities upkeep", fin.costs.upkeep) +
@@ -856,6 +878,7 @@ function save() {
     board,
     politicalActions,
     investedThisSeason,
+    oldBoys,
     tactics: userTactics,
     results: season.fixtures
       .filter((f) => f.played)
@@ -918,6 +941,7 @@ function load(): boolean {
     board = Array.isArray(d.board) && d.board.length ? d.board : generateBoard(new Rng((seasonSeed * 613 + 7) >>> 0));
     politicalActions = d.politicalActions ?? 2;
     investedThisSeason = !!d.investedThisSeason;
+    oldBoys = Array.isArray(d.oldBoys) ? d.oldBoys : [];
     managerName = d.managerName ?? "Coach";
     careerHistory = Array.isArray(d.careerHistory) ? d.careerHistory : [];
     [careerW, careerD, careerL] = Array.isArray(d.careerRec) ? d.careerRec : [0, 0, 0];
@@ -999,6 +1023,7 @@ function startCareer(club: Team) {
   board = generateBoard(new Rng((seasonSeed * 613 + 7) >>> 0));
   politicalActions = 2;
   investedThisSeason = false;
+  oldBoys = [];
   refreshSponsors();
   refreshRecruits();
   logNews(`📅 ${managerName} takes charge of ${club.name} in ${divisionLabel(club)}.`);
@@ -1386,6 +1411,16 @@ function finalizeRollover() {
   const year = pendingRolloverYear;
   const devRng = new Rng((seasonSeed * 2654435761 + year * 31) >>> 0);
   lastDev = developSquad(season.rosterFor(user), devRng, user, repState[user.short] ?? user.reputation);
+  // notable retirees come back into the fold as donating old boys
+  for (const dep of lastDev.retirements) {
+    const ob = makeOldBoy(dep.player);
+    if (ob) {
+      oldBoys.push(ob);
+      logNews(`🎩 ${ob.name} retires after ${ob.years} years — joins as ${ob.role}, donating ${formatKr(ob.donation)}/yr.`);
+    }
+  }
+  oldBoys.sort((a, b) => b.donation - a.donation);
+  if (oldBoys.length > 16) oldBoys.length = 16; // keep the most generous benefactors
   const carry = new Map<Team, Player[]>([[user, lastDev.roster]]);
   seasonSeed = (seasonSeed * 1103515245 + 12345) >>> 0;
   season = new Season(divisionFor(user), user, seasonSeed, { reputation: repState, facilities: facState, year }, carry);

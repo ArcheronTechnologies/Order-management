@@ -90,6 +90,8 @@ export function developSquad(
   const retirements: Departure[] = [];
   const departures: Departure[] = [];
   const avgCA = prev.reduce((s, p) => s + p.hidden.currentAbility, 0) / Math.max(1, prev.length);
+  // everyone who was here banks another season of service (for old-boy loyalty)
+  for (const p of prev) p.seasonsAtClub = (p.seasonsAtClub ?? 0) + 1;
 
   for (const p of prev) {
     // students are here on a fixed stint

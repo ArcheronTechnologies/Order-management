@@ -78,6 +78,8 @@ export interface Player {
   studentYearsLeft?: number;
   /** change in current ability over the most recent pre-season (for the UI). */
   lastDevDelta?: number;
+  /** seasons served at the current club — drives "old boy" loyalty on retirement. */
+  seasonsAtClub?: number;
   position: PositionDef;
   forward: boolean;
   attr: Attributes;

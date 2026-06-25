@@ -63,6 +63,11 @@ refactor everything else needs).
     Visible attributes track ability changes; a pre-season summary shows
     retirements / departures / arrivals / risers (`development.ts`, full user
     roster persisted in saves).
+  - *Done (old boys):* notable retirees from your club come back as **old boys** —
+    donors & supporters who give a yearly donation that scales with how
+    successful their years were (seasons served + peak ability). Their combined
+    donations are a growing passive income line, shown on the Club screen and in
+    the finances (`makeOldBoy`, `seasonsAtClub` tenure tracking).
   - *Done:* **in-season training** — a weekly plan (intensity light/normal/hard
     × focus balanced/fitness/attack/defence/set-piece) nudges ability and the
     focused attributes toward potential. Amateur-capped by **turnout**

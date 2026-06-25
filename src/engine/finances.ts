@@ -8,7 +8,7 @@ import { distanceKm } from "../data/geo";
  * sponsorship & gate money matter). All figures in kr.
  */
 export interface FinanceBreakdown {
-  income: { membership: number; sponsorship: number; matchday: number; bar: number };
+  income: { membership: number; sponsorship: number; matchday: number; bar: number; donations: number };
   costs: { upkeep: number; kit: number; travel: number; rent: number };
   incomeTotal: number;
   costTotal: number;
@@ -49,7 +49,8 @@ export function computeFinances(
   homeMatches: number,
   awayOpponents: Team[],
   facilities: number,
-  ops: ClubOps
+  ops: ClubOps,
+  donations = 0
 ): FinanceBreakdown {
   const membership = squadSize(reputation) * MEMBER_FEE;
   const sponsorship = Math.round(reputation * tierMultiplier(tier) * SPONSOR_PER_REP);
@@ -65,10 +66,10 @@ export function computeFinances(
     0
   );
   const rent = (ops.fieldRented ? FIELD_RENT : 0) + (ops.trainingRented ? TRAINING_RENT : 0);
-  const incomeTotal = membership + sponsorship + matchday + bar;
+  const incomeTotal = membership + sponsorship + matchday + bar + donations;
   const costTotal = upkeep + kit + travel + rent;
   return {
-    income: { membership, sponsorship, matchday, bar },
+    income: { membership, sponsorship, matchday, bar, donations },
     costs: { upkeep, kit, travel, rent },
     incomeTotal,
     costTotal,
